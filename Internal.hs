@@ -53,7 +53,7 @@ data Gamma = Gamma [(N,Term)]
   deriving (Eq,Ord)
 
 instance Show Gamma where
-  show (Gamma ls) = brack . intercalate "," $ map go ls
+  show (Gamma ls) = brack . intercalate ", " $ map go ls
     where go (n,t) = n ++ " : " ++ show t
 
 
@@ -72,7 +72,7 @@ instance Show Term where
    Lam (n,t) t' -> "\\" ++ par (n ++ " : " ++ show t) ++ " -> " ++ show t'
    App t1 t2 -> show t1 ++ " " ++ show t2
    Sig bs -> "sig" ++ brace (intercalate "," (map show bs))
-   Struct assn -> "struct" ++ brace (intercalate "," (map (\(n,t) -> n ++ " := "++ show t) assn))
+   Struct assn -> "struct" ++ brace (intercalate "," (map show assn))
    Proj t n -> show t ++ "." ++ n
    MetaTerm (Meta n _ _) -> n
    Subst t sub -> (show t) ++ brack (show sub)
@@ -85,7 +85,11 @@ instance Show Bind where
 
 instance Show Assign where
   show (Pos t) = show t
-  show (Named n t) = n ++ ":=" ++ show t
+  show (Named n t) = n ++ " := " ++ show t
+
+instance Show Assign' where
+  show (Ass n t) = n ++ " := " ++ show t
+
 
 instance Show Substitution where
   show (Sub t n) = show t ++ " / " ++ n
@@ -142,9 +146,7 @@ instance Show Constraint where
         where phis' = brace (intercalate "," (map show phis))
       SubC g fs t -> par (show fs ++ " <_ " ++ show t) ++ brack (show g)
       PrjC g t _T t' _T' f -> par (show t ++ " : " ++ show _T ++ " <-- " ++ show t' ++ " : " ++ show _T' ++ "<" ++ f ++ ">") ++ brack (show g)
-      EquC g _t _T _t' _T' -> par (show _t ++ " : " ++ show _T ++ "=" ++ show _t' ++ " : " ++ show _T') ++ brack (show g)
-
-
+      EquC g _t _T _t' _T' -> par (show _t ++ " <-- " ++ show _t' ++ " : " ++ show _T ++ " = " ++ show _T') ++ brack (show g)
 --
 
 lookupG :: Gamma -> N -> Term

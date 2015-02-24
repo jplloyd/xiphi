@@ -21,45 +21,38 @@ data ChkProb = ChkProb [(N,Expr)] Expr Expr
 -- Check a problem given a set of postulates and a single type checking problem
 -- A Type checking problem consists of a set of postulates followed by two expressions, the
 -- first to be checked against the second.
-checkProb :: ChkProb -> Maybe (I.Xi,I.Term)
+--checkProb :: ChkProb -> Maybe (I.Xi,a)
 checkProb (ChkProb posts e eT) = do
   consts <- scopecheckPostulates emptyC (SS posts)
   e' <- scopecheck emptyC e -- > Turn into core
   eT' <- scopecheck emptyC eT
   let elab = do
-        cs <- elabSigma consts -- elaborate the postulates into constants (with approriate scoping)
-        tT <- local (liftG (++cs)) (check (I.Gamma []) eT' I.Set)
-        local (liftG (++cs)) (check (I.Gamma []) e' tT)
+        elabSigma consts -- cs <-     -- elaborate the postulates into constants (with approriate scoping)
+--        tT <- local (liftG (++cs)) (check (I.Gamma []) eT' I.Set)
+--        local (liftG (++cs)) (check (I.Gamma []) e' tT)
   let (term, xi) = runState (runReaderT elab (I.Gamma [])) I.emptyXi
   return (xi,term) -- $ elaborate iConsts e' tT
 -- Run the evaluation and obsolete
 
 -- Consider using Either for some improved error messages
 
--- Encoded problems
+-- Encoded problems - the lambda example
+eBool = fun dSet (fun dSet Set)
+etrue = elam2 _x _y vx
 
+epoly = funASet dA vA
+emono = fun dSet Set
 
+-- Postulates
 postulate =
   [(_Eq, funASet dA (fun dA Set))
   ,(_refl, funASet aA (appEq va va))
-
-  ,(_w, fun bbSetSetSet (
-            fun dappEq_vb_true (
-                fun difb Set
-            )
-        )
-   )
-
-  ,(_f, fun bbSetSetSet (
-            fun difb (
-                fun dappEq_vb_true Set
-            )
-        )
-   )
+--  ,(_w, fun bbBool (fun dappEq_vb_true (fun difb Set)))
+--  ,(_f, fun bbBool (fun difb (fun dappEq_vb_true Set)))
   ]
 
+-- Type checking problems
 works = ChkProb postulate (eapp3 cw Wld refl_Wld eid) Set
-
 fails = ChkProb postulate (eapp3 cf Wld eid refl_Wld) Set
 
 
@@ -90,22 +83,17 @@ vb = Var _b
 
 -- Bindings
 bASet = Bind _A Set
-bbSetSetSet = Bind _b (fun dSet (fun dSet Set))
 aA = Bind _a vA
+bbBool = Bind _b eBool
 
 -- Dummy bindings
-dappEq_vb_true = dummy (appEq vb true)
-difb = dummy (eapp2 vb (funASet dA vA) (fun dSet Set))
 dSet = dummy Set
 dA = dummy vA
-
--- Function types
-funASet = Fun [bASet]
-fun = Fun []
+dappEq_vb_true = dummy (appEq vb etrue)
+difb = dummy (eapp2 vb epoly emono)
 
 -- Function abstractions
-true = elam2 _x _y vx
-eid =  elam1 _z vz
+eid = elam1 _z vz
 
 -- Applications
 refl_Wld = eapp1 crefl Wld
@@ -120,3 +108,6 @@ elam2 n1 n2 e = elam1 n1 (elam1 n2 e)
 
 appEq = eapp2 cEq
 dummy = Bind "£"
+
+funASet = Fun [bASet]
+fun = Fun []

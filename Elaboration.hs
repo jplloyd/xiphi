@@ -41,7 +41,7 @@ elaborate' = elaborate emptyXi
 check :: Gamma -> Expr -> Type -> ElabM Term
 check g e t = do
   (typ,term) <- infer g e
-  genEq g typ term t
+  genEq g term typ t
 
 infer :: Gamma -> Expr -> ElabM (Type, Term)
 infer g _e = case _e of
