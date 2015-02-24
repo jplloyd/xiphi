@@ -32,6 +32,8 @@ data Expr =
  | Proj Expr F    -- Projection
  | WCrd           -- Wildcard/underscore
 
+data CSigma = CS [(N,Expr)]
+
 -- show instance for the expressions 
 instance Show Expr where
   show e' = case e' of 

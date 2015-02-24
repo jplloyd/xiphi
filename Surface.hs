@@ -5,7 +5,7 @@ import Util
 
 type N = String
 
-newtype Bind = Bind (N,Expr) 
+data Bind = Bind N Expr
 
 data Assign = Pos Expr | Named N Expr
 
@@ -19,6 +19,7 @@ data Expr =
  | Lam [N] N Expr
  | Wld
 
+data SSigma = SS [(N,Expr)]
 
 instance Show Expr where
   show e' = case e' of 
@@ -36,8 +37,8 @@ pTele impl = concatMap (pBind impl)
 
 
 pBind :: Bool -> Bind -> String
-pBind True (Bind (n,e)) = brace $ n ++ ":" ++ show e
-pBind False (Bind (n,e)) = par $ n ++ ":" ++ show e
+pBind True (Bind n e) = brace $ n ++ ":" ++ show e
+pBind False (Bind n e) = par $ n ++ ":" ++ show e
 
 pAssgn :: [Assign] -> String
 pAssgn = unwords  . map show

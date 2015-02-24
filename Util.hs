@@ -9,6 +9,8 @@ par = surround "(" ")"
 brace :: String -> String
 brace = surround "{" "}"
 
+brack :: String -> String
+brack = surround "[" "]"
 
 -- This operation is unsafe
 strip :: String -> String
