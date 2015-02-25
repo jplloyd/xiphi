@@ -85,7 +85,7 @@ inferSig g _bs = case _bs of
   (Bind n e : bs) -> do
     t <- check g e I.Set
     (I.Sig bs') <- inferSig (addBind (n,t) g) bs
-    return $ I.Sig (I.Bind (n,t) : bs')
+    return $ I.Sig (I.Bind n t : bs')
 
 infPhi :: Gamma -> [Assign] -> ElabM [Phi]
 infPhi g = mapM go
@@ -140,10 +140,15 @@ freshBind = do
   return b
 
 genProjC :: Gamma -> Term -> Type -> F -> ElabM (Term,Type)
-genProjC g term typ f = do
-  (y,x) <- freshMetas g
-  addConstr (PrjC g y x term typ f)
-  return (y,x)
+genProjC g term typ f = 
+  if sig typ then do
+    let substs = getSubsts f term typ
+    let fTyp = getSigT f typ
+    return (I.Proj term f, addSubsts fTyp substs)
+  else do
+    (y,x) <- freshMetas g
+    addConstr (PrjC g y x term typ f)
+    return (y,x)
 
 genExpC :: Gamma -> [Phi] -> ElabM (Term,Type)
 genExpC g phis = do
@@ -165,3 +170,32 @@ elabSigma (CS cs) = go cs
           t <- check (Gamma []) e I.Set 
           cs'' <- local (liftG ((n,t):)) (go cs')
           return $ (n,t) : cs''
+
+
+
+
+-- TEMPORARY SHIT DOWN HERE, BEWARE ITS TEMPORARY NATURE AND LOATHE ITS LACK OF ELEGANCE
+
+-- temporary sig test
+sig :: Term -> Bool
+sig (I.Sig _) = True
+sig _       = False
+
+
+getSubsts :: N -> Term -> Term -> [Substitution]
+getSubsts f t (I.Sig bs) = map (\(I.Bind n _) -> Sub (I.Proj t n) n) (takeWhileInc (\(I.Bind n' _) -> n' /= f) bs)
+getSubsts _ _ _          = error "You dare try to extract precious substs from anything but a sig? Fool!"
+
+
+getSigT :: N -> Term -> Term
+getSigT f _t@(I.Sig bs) = go bs
+  where go [] = error $ "There is no field "++ f ++ " in :" ++ show _t
+        go (I.Bind n t : bs') = if n == f then t else go bs'
+getSigT _ _ = error "There are no fields in non-sigs Mr. Clever esq."
+
+addSubsts :: Term -> [Substitution] -> Term
+addSubsts t sbs = if t == I.Set then I.Set else foldr (\s -> flip I.Subst s) t sbs
+
+takeWhileInc :: (a -> Bool) -> [a] -> [a]
+takeWhileInc _ [] = []
+takeWhileInc p (x:xs) = if p x then x : takeWhileInc p xs else [x]

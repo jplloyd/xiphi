@@ -11,7 +11,7 @@ type F = String
 data Substitution = Sub Term N
   deriving (Eq,Ord)
 
-newtype Bind = Bind (N,Term)
+data Bind = Bind N Term
   deriving (Eq,Ord)
 
 type Type = Term
@@ -47,14 +47,11 @@ data Term =
 data Meta = Meta N Type Gamma
   deriving (Eq,Ord)
 
+data Xi = Xi {bindC :: Int, metaC :: Int, constraints :: [Constraint], metas :: [Meta]}
+
 -- Variable context - doubles as Sigma
 data Gamma = Gamma [(N,Term)]
   deriving (Eq,Ord)
-
-instance Show Gamma where
-  show (Gamma ls) = brack . intercalate ", " $ map go ls
-    where go (n,t) = n ++ " : " ++ show t
-
 
 -- I'm lazy
 liftG :: ([(N,Term)] -> [(N,Term)]) -> Gamma -> Gamma
@@ -80,7 +77,7 @@ instance Show Meta where
   show (Meta n t g) = par (n ++ ":" ++ show t) ++ brack (show g)
 
 instance Show Bind where
-  show (Bind (n,t)) = n ++ " : " ++ show t
+  show (Bind n t) = n ++ " : " ++ show t
 
 instance Show Assign where
   show (Pos t) = show t
@@ -89,20 +86,21 @@ instance Show Assign where
 instance Show Assign' where
   show (Ass n t) = n ++ " := " ++ show t
 
-
 instance Show Substitution where
   show (Sub t n) = show t ++ " / " ++ n
+
+instance Show Gamma where
+  show (Gamma ls) = brack . intercalate ", " $ map go ls
+    where go (n,t) = n ++ " : " ++ show t
+
+instance Show Xi where
+  show (Xi _ _ constrs metas') = surround "[[\n" "\n]]" (go constrs ++ "\n--===--\n\n" ++ go metas')
+    where go = unlines . map show
 
 ---
 
 addBind :: (N,Term) -> Gamma -> Gamma
 addBind a (Gamma bs) = Gamma (a:bs) 
-
-data Xi = Xi {bindC :: Int, metaC :: Int, constraints :: [Constraint], metas :: [Meta]}
-
-instance Show Xi where
-  show (Xi _ _ constrs metas') = surround "[[\n" "\n]]" (go constrs ++ "\n\n--===--\n\n" ++ go metas')
-    where go = unlines . map show
 
 addConstraint :: Constraint -> Xi -> Xi
 addConstraint c x = x{constraints=c : constraints x}
