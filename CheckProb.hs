@@ -1,9 +1,7 @@
-
-
--- Imports
+module CheckProb where
 
 import Surface
-import qualified Core as C
+import Internal(Gamma(..))
 import qualified Internal as I
 import ScopeCheck
 import Elaboration
@@ -28,9 +26,9 @@ checkProb (ChkProb posts e eT) = do
   eT' <- scopecheck emptyC eT
   let elab = do
         elabSigma consts -- cs <-     -- elaborate the postulates into constants (with approriate scoping)
---        tT <- local (liftG (++cs)) (check (I.Gamma []) eT' I.Set)
---        local (liftG (++cs)) (check (I.Gamma []) e' tT)
-  let (term, xi) = runState (runReaderT elab (I.Gamma [])) I.emptyXi
+--        tT <- local (liftG (++cs)) (check (Gamma []) eT' I.Set)
+--        local (liftG (++cs)) (check (Gamma []) e' tT)
+  let (term, xi) = runState (runReaderT elab (Gamma [])) I.emptyXi
   return (xi,term) -- $ elaborate iConsts e' tT
 -- Run the evaluation and obsolete
 

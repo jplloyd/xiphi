@@ -16,7 +16,6 @@ newtype Bind = Bind (N,Term)
 
 type Type = Term
 
-
 data Assign' = Ass N Term
   deriving (Eq,Ord)
 
@@ -126,7 +125,7 @@ data Constraint =
     ExpC Gamma Term [Phi] Type
   | SubC Gamma [F] Type
   | PrjC Gamma Term Type Term Type F
-  | EquC Gamma Term Type Term Type
+  | EquC Gamma Term Type Term Type -- meta, metaType, term, TermType
   deriving Ord
 
 -- Looks like a DOS racing game ↓ 
@@ -146,7 +145,7 @@ instance Show Constraint where
         where phis' = brace (intercalate "," (map show phis))
       SubC g fs t -> par (show fs ++ " <_ " ++ show t) ++ brack (show g)
       PrjC g t _T t' _T' f -> par (show t ++ " : " ++ show _T ++ " <-- " ++ show t' ++ " : " ++ show _T' ++ "<" ++ f ++ ">") ++ brack (show g)
-      EquC g _t _T _t' _T' -> par (show _t ++ " <-- " ++ show _t' ++ " : " ++ show _T ++ " = " ++ show _T') ++ brack (show g)
+      EquC g _t _T _t' _T' -> par (show _t ++ " <-- " ++ show _t' ++ " : " ++ show _T' ++ " = " ++ show _T) ++ brack (show g)
 --
 
 lookupG :: Gamma -> N -> Term

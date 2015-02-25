@@ -94,11 +94,14 @@ infPhi g = mapM go
     go (Named f e) = infer g e >>= \(_T,t) -> return $ Phi (I.Named f t) _T
 
 genEq :: Gamma -> Term -> Type -> Type -> ElabM Term
-genEq g trm typ typ' = do
-  m <- freshMeta g typ'
-  addConstr (EquC g trm typ m typ')
-  return m
-
+genEq g trm typ typ' = 
+  if (typ,typ') == (I.Set,I.Set)
+  then return trm
+  else do
+    m <- freshMeta g typ'
+    addConstr (EquC g m typ' trm typ)
+    return m
+  
 -- Operations on Xi
 
 freshMeta :: Gamma -> Type -> ElabM Term
