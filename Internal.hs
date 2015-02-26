@@ -74,7 +74,7 @@ instance Show Term where
    Subst t sub -> (show t) ++ brack (show sub)
 
 instance Show Meta where
-  show (Meta n t g) = par (n ++ ":" ++ show t) ++ brack (show g)
+  show (Meta n t g) = par (n ++ " : " ++ show t) ++ "\n\t\915 = " ++ (show g)
 
 instance Show Bind where
   show (Bind n t) = n ++ " : " ++ show t
@@ -90,12 +90,12 @@ instance Show Substitution where
   show (Sub t n) = show t ++ " / " ++ n
 
 instance Show Gamma where
-  show (Gamma ls) = brack . intercalate ", " $ map go ls
+  show (Gamma ls) = brack . intercalate ", " . reverse $ map go ls
     where go (n,t) = n ++ " : " ++ show t
 
 instance Show Xi where
   show (Xi _ _ constrs metas') = surround "[[\n" "\n]]" (go constrs ++ "\n--===--\n\n" ++ go metas')
-    where go = unlines . map show
+    where go = unlines . map show . reverse
 
 ---
 
@@ -139,11 +139,12 @@ instance Eq Constraint where
 
 instance Show Constraint where
   show c = case c of
-      ExpC g t phis tT -> par (show t ++ " <-- " ++ phis' ++ " |> " ++ show tT) ++ brack (show g)
+      ExpC g t phis tT -> "XP: " ++ par (show t ++ " <-- " ++ phis' ++ " |> " ++ show tT) ++ gm g
         where phis' = brace (intercalate "," (map show phis))
-      SubC g fs t -> par (show fs ++ " <_ " ++ show t) ++ brack (show g)
-      PrjC g t _T t' _T' f -> par (show t ++ " : " ++ show _T ++ " <-- " ++ show t' ++ " : " ++ show _T' ++ "<" ++ f ++ ">") ++ brack (show g)
-      EquC g _t _T _t' _T' -> par (show _t ++ " <-- " ++ show _t' ++ " : " ++ show _T' ++ " = " ++ show _T) ++ brack (show g)
+      SubC g fs t -> "SB: " ++ par (show fs ++ " <_ " ++ show t) ++ gm g
+      PrjC g t _T t' _T' f -> "PR: " ++ par (show t ++ " : " ++ show _T ++ " <-- " ++ show t' ++ " : " ++ show _T' ++ "<" ++ f ++ ">") ++ gm g
+      EquC g _t _T _t' _T' -> "EQ: " ++ par (show _t ++ " <-- " ++ show _t' ++ " : " ++ show _T' ++ " = " ++ show _T) ++ gm g
+    where gm g = "\n\t\915 = " ++ show g 
 --
 
 lookupG :: Gamma -> N -> Term

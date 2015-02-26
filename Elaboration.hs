@@ -59,9 +59,9 @@ infer g _e = case _e of
     cod <- check (addBind (n,term) g) e' I.Set
     return (I.Set, I.Fun (n, term) cod)
   App e1 e2 -> do
-    (I.Fun b@(x, dom) cod) <- getFunShape g
-    t1 <- check g e1 dom
-    t2 <- check (addBind b g) e2 cod 
+    f@(I.Fun b@(x, dom) cod) <- getFunShape g
+    t1 <- check g e1 f
+    t2 <- check (addBind b g) e2 dom 
     return (I.Subst cod (Sub t2 x), I.App t1 t2)
   Sig bs -> inferSig g bs >>= \t -> return (I.Set,t)
   LSig fs -> do
@@ -77,7 +77,7 @@ infer g _e = case _e of
     return (uT,u)
   WCrd -> do
     (y,x) <- freshMetas g
-    return (y,x)
+    return (x,y)
 
 inferSig :: Gamma -> [Bind] -> ElabM Term
 inferSig g _bs = case _bs of 

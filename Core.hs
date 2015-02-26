@@ -48,3 +48,7 @@ instance Show Expr where
     EStr asn -> "estr" ++ brace (intercalate "," (map (strip . show) asn))
     Proj e f -> show e ++"."++f
     WCrd -> "_"
+
+
+instance Show CSigma where
+  show (CS ls) = show ls

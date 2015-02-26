@@ -7,7 +7,7 @@ import ScopeCheck
 import Elaboration
 
 import Internal(liftG)
-
+import qualified Core as C
 
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.State
@@ -15,6 +15,9 @@ import Control.Monad.Trans.State
 
 data ChkProb = ChkProb [(N,Expr)] Expr Expr
 
+
+
+scheck = scopecheckPostulates emptyC (SS postulate)
 
 -- Check a problem given a set of postulates and a single type checking problem
 -- A Type checking problem consists of a set of postulates followed by two expressions, the
@@ -44,7 +47,7 @@ emono = fun dSet Set
 -- Postulates
 postulate =
   [(_Eq, funASet dA (fun dA Set))
-  ,(_refl, funASet aA (appEq va va))
+  ,(_refl, funASet baA (appEq va va))
 --  ,(_w, fun bbBool (fun dappEq_vb_true (fun difb Set)))
 --  ,(_f, fun bbBool (fun difb (fun dappEq_vb_true Set)))
   ]
@@ -81,7 +84,7 @@ vb = Var _b
 
 -- Bindings
 bASet = Bind _A Set
-aA = Bind _a vA
+baA = Bind _a vA
 bbBool = Bind _b eBool
 
 -- Dummy bindings

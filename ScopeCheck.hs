@@ -6,12 +6,19 @@ import qualified Core as C
 
 import Control.Monad
 
-data CBind = CB (C.Expr,N)
+import Control.Monad.Trans.State
 
-data Context = Context {vCounter :: Int, fCounter::Int, constants :: [(C.N,C.Expr)], binds :: [CBind]}
+type Error = String
+
+type ScopeM = StateT Context (Either Error)
+
+
+data CBind = CB (C.Expr, N)
+
+data Context = Context {vCounter :: Int, fCounter::Int,  binds :: [CBind]}
 
 emptyC :: Context 
-emptyC = Context 0 0 [] []
+emptyC = Context 0 0 []
 
 inc :: Context -> Context
 inc c = c{fCounter=fCounter c + 1}
@@ -36,7 +43,7 @@ scopecheck c _e = case _e of
     let r = "r" ++ (show . fCounter $ c)
     let c' = addBinds (map (\f -> CB (C.Proj (C.Var r) f, f)) bs) (inc c)
     e'' <- scopecheck c' e'  
-    e2 <- scopecheck (addBind (CB (e'',n)) c' ) e
+    e2 <- scopecheck (addBind (CB (C.Var n,n)) c' ) e
     return $ C.Fun (C.Bind r sig) (C.Fun (C.Bind n e'') e2)
   App e impl e' -> do
     e1 <- scopecheck c e
@@ -65,12 +72,12 @@ unique [] = True
 unique (a : as) = a `notElem` as && unique as
 
 makesig :: Context -> [Bind] -> Maybe C.Expr
-makesig c bs | unique . bindsOf $ bs = C.Sig `fmap` go c bs
-             | otherwise = Nothing
+makesig c _bs | unique . bindsOf $ _bs = C.Sig `fmap` go c _bs
+              | otherwise = Nothing
   where go _ [] = Just []
-        go c' (Bind n e:bs) = do
+        go c' (Bind n e : bs) = do
           e' <- scopecheck c' e
-          let c'' = (addBind (CB (C.Var n,n)) c')
+          let c'' = addBind (CB (C.Var n,n)) c'
           bs' <- go c'' bs
           return $ C.Bind n e' : bs'
 
