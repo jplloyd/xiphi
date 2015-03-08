@@ -1,51 +1,48 @@
 module Surface where
 
-
 import Util 
 
 type N = String
 
-data Bind = Bind N Expr
-
-data Assign = Pos Expr | Named N Expr
+data SBind = SBind N SExpr
+data SAssign = SPos SExpr | SNamed N SExpr
 
 -- Expressions in the surface language
-data Expr = 
-   Set 
- | Cns N 
- | Var N 
- | Fun [Bind] Bind Expr 
- | App Expr [Assign] Expr
- | Lam [N] N Expr
- | Wld
+data SExpr = 
+   SSet 
+ | SCns N 
+ | SVar N 
+ | SFun [SBind] SBind SExpr 
+ | SApp SExpr [SAssign] SExpr
+ | SLam [N] N SExpr
+ | SWld
 
-data SSigma = SS [(N,Expr)]
+data SSigma = SS [(N,SExpr)]
 
-instance Show Expr where
+instance Show SExpr where
   show e' = case e' of 
-   Set -> "Set"
-   Var n -> n
-   Cns n -> "Const_" ++ n
-   Fun impl expl cod -> pTele True impl ++ " " ++ pBind False expl ++ "->" ++ show cod
-   App e1 impl e2 -> unwords [show e1,pAssgn impl,show e2]
-   Lam impl var e -> "\\" ++ concatMap brace impl ++ " " ++ var ++ " -> " ++ show e
-   Wld -> "_"
+   SSet -> "Set"
+   SVar n -> n
+   SCns n -> "Const_" ++ n
+   SFun impl expl cod -> pTele True impl ++ " " ++ pBind False expl ++ "->" ++ show cod
+   SApp e1 impl e2 -> unwords [show e1,pAssgn impl,show e2]
+   SLam impl var e -> "\\" ++ concatMap brace impl ++ " " ++ var ++ " -> " ++ show e
+   SWld -> "_"
+
+instance Show SAssign where
+  show e = brace $ case e of
+    SPos e' -> show e'
+    SNamed n e' -> n ++ ":=" ++ show e'
 
 -- Print declared function telescope
-pTele :: Bool -> [Bind] -> String
+pTele :: Bool -> [SBind] -> String
 pTele impl = concatMap (pBind impl)
 
+-- Print binds
+pBind :: Bool -> SBind -> String
+pBind True (SBind n e) = brace $ n ++ ":" ++ show e
+pBind False (SBind n e) = par $ n ++ ":" ++ show e
 
-pBind :: Bool -> Bind -> String
-pBind True (Bind n e) = brace $ n ++ ":" ++ show e
-pBind False (Bind n e) = par $ n ++ ":" ++ show e
-
-pAssgn :: [Assign] -> String
+-- Print list of impl arguments (given)
+pAssgn :: [SAssign] -> String
 pAssgn = unwords  . map show
-
-
-instance Show Assign where
-  show e = brace $ case e of
-    Pos e' -> show e'
-    Named n e' -> n ++ ":=" ++ show e'  
-

@@ -1,110 +1,178 @@
-{-# LANGUAGE TupleSections #-}
 module ScopeCheck where
 
 import Surface as S
-import qualified Core as C
+import Core as C
 
-import Control.Monad
+import Data.Functor
+import Data.Monoid
+import Data.Tuple
 
-import Control.Monad.Trans.State
+import Control.Monad.Trans.Writer
+import Control.Monad.State
+import Control.Monad.Reader
+import Control.Monad.Except
+
+-- Basic type synonyms
 
 type Error = String
 
-type ScopeM = StateT Context (Either Error)
+-- Difference list - used for writing out the progress
+newtype DList a = DL {getDlist :: [a] -> [a]}
 
+fromDList :: DList a -> [a]
+fromDList = ($ []) . getDlist
 
-data CBind = CB (C.Expr, N)
+toDList :: [a] -> DList a
+toDList ls = DL (ls++)
 
-data Context = Context {vCounter :: Int, fCounter::Int,  binds :: [CBind]}
+instance Monoid (DList a) where
+  mempty = DL $ \xs -> [] ++ xs
+  mappend d1 d2 = DL $ getDlist d1 . getDlist d2
+
+-- Context and operations
+
+data Context = Context {vCounter :: Int, rCounter::Int}
 
 emptyC :: Context 
-emptyC = Context 0 0 []
+emptyC = Context 0 0
 
-inc :: Context -> Context
-inc c = c{fCounter=fCounter c + 1}
+incF :: Context -> Context
+incF c = c{rCounter=rCounter c + 1}
 
 incV :: Context -> Context
 incV c = c{vCounter = vCounter c + 1}
 
-addBind :: CBind -> Context -> Context
-addBind b c = c{binds=b : binds c}
+freshVarBind :: SCM Ref
+freshVarBind = do
+  vc <- vCounter <$> get
+  modify incV
+  return $ var vc
 
-addBinds  :: [CBind] -> Context -> Context
-addBinds bs c = c{binds=bs ++ binds c}
+freshRecBind :: SCM Ref
+freshRecBind = do
+  vc <- rCounter <$> get
+  say $ "Creating a fresh record bind:" ++ show vc
+  modify incV
+  return $ rec vc
 
-scopecheck :: Context -> Expr -> Maybe C.Expr
-scopecheck c _e = case _e of
-  Var n -> substitute c n
-  Cns n -> return $ C.Cns n
-  Set -> return C.Set
-  Fun impl (Bind n e') e -> do
-    sig <- makesig c impl
-    let bs = bindsOf impl
-    let r = "r" ++ (show . fCounter $ c)
-    let c' = addBinds (map (\f -> CB (C.Proj (C.Var r) f, f)) bs) (inc c)
-    e'' <- scopecheck c' e'  
-    e2 <- scopecheck (addBind (CB (C.Var n,n)) c' ) e
-    return $ C.Fun (C.Bind r sig) (C.Fun (C.Bind n e'') e2)
-  App e impl e' -> do
-    e1 <- scopecheck c e
-    e2 <- scopecheck c e'
-    estr <- makestruct c impl
-    return $ C.App (C.App e1 estr) e2
-  Lam impls expl e -> do
-    lsig <- makelsig impls
-    let r = "r" ++ show (fCounter c)
-    let nBinds = CB (C.Var expl, expl) : map (\f -> CB (C.Proj (C.Var r) f, f)) impls
-    let c' = addBinds nBinds (inc c)
-    e1 <- scopecheck c' e
-    return $ C.Lam (C.Bind "r" lsig) (C.Lam (C.Bind expl C.WCrd) e1)
-  Wld -> return C.WCrd
+-- Substitutions (CExpr for variables) and related operations
 
-substitute :: Context -> N -> Maybe C.Expr
-substitute c n = repl (binds c)
-  where repl []             = Nothing
-        repl (CB (e,n'):bs) = if n' == n then Just e else repl bs
+type Substitution = (N,CExpr)
 
-makelsig :: [N] -> Maybe C.Expr
-makelsig ns = if unique ns then return (C.LSig ns) else Nothing
+type Theta = [Substitution]
 
-unique :: Eq a => [a] -> Bool
-unique [] = True
-unique (a : as) = a `notElem` as && unique as
+addBind :: Substitution -> SCM a -> SCM a
+addBind s = local (s:)
 
-makesig :: Context -> [Bind] -> Maybe C.Expr
-makesig c _bs | unique . bindsOf $ _bs = C.Sig `fmap` go c _bs
-              | otherwise = Nothing
-  where go _ [] = Just []
-        go c' (Bind n e : bs) = do
-          e' <- scopecheck c' e
-          let c'' = addBind (CB (C.Var n,n)) c'
-          bs' <- go c'' bs
-          return $ C.Bind n e' : bs'
+addBinds  :: [Substitution] -> SCM a -> SCM a
+addBinds ss = local (reverse ss ++)
 
-makestruct :: Context -> [Assign] -> Maybe C.Expr
-makestruct c as = C.EStr `fmap` go [] as
-  where go _     []  = Just []
-        go taken ass = case ass of
-          Named n e : as' -> if n `elem` taken then Nothing else do
-            e' <- scopecheck c e
-            as'' <- go (n:taken) as'
-            return (C.Named n e' : as'')
-          Pos e : as' -> do
-            e' <- scopecheck c e
-            as'' <- go taken as'
-            return (C.Pos e' : as'')
-            
-bindsOf :: [Bind] -> [N] 
-bindsOf = map (\(Bind n _) -> n)
+getSubstitute :: N -> SCM CExpr
+getSubstitute n = do
+  say $ "Looking up the replacement for " ++ n
+  subs <- ask
+  let cexpr = lookup n subs
+  let go (Just n') = say ("Found the replacement: " ++ show n') >> return n'
+      go Nothing  = throwError $ "Referenced variable out of scope: " ++ n
+  go cexpr
 
+-- Error handling
+type ErrT = ExceptT Error
 
+-- Scope checking logging
+type LogT = WriterT (DList Char)
 
+-- Substitution context
+type SubT = ReaderT Theta
 
--- Special scope checking for a surface sigma to a core sigma
+-- Global counters
+type Cntx = State Context
 
--- Replace binds with pairs of ns and expressions consistently
+-- Scope checking monad
+type SCM = ErrT (LogT (SubT Cntx))
 
-scopecheckPostulates :: Context -> SSigma -> Maybe C.CSigma
-scopecheckPostulates c (SS ls) = C.CS `fmap` go ls
-  where go [] = Just []
-        go ((n,e):xs) = liftM2 ((:) . (n,)) (scopecheck c e) (go xs)
+-- Add message in the writer, separated by newline
+say :: String -> SCM ()
+say s = lift $ tell (toDList (s++"\n"))
+
+-- Initate scope checking
+-- This can easily be written on one line, and anyone doing so will quickly regret it
+scopecheck :: SExpr -> (DList Char,Either Error CExpr)
+scopecheck e = swap res4
+  where res1 = runExceptT . scopecheck' $ e
+        res2 = runWriterT res1
+        res3 = runReaderT res2 []    
+        res4 = evalState res3 emptyC
+
+-- Scope checking within the SCM monad
+scopecheck' :: SExpr -> SCM CExpr
+scopecheck' _e = case _e of
+  SSet -> say "Transforming Set" >> return CSet
+  SCns n -> say ("Transforming the constant: " ++ n) >> return (CCns n)
+  SVar n -> say ("Attempting to transform variable: " ++ n) >> getSubstitute n
+  SFun impl (SBind n e) cod -> do
+    say ("Transforming the function type: " ++ show _e)
+    sig@(CSig bs) <- makeSig impl
+    r <- freshRecBind
+    let recSubsts = map (\(CBind n' _) -> (n', CProj (CVar r) n')) bs
+    say "Adding substitutions for references to the implicits, then checking the explicit argument."
+    e' <- addBinds recSubsts $ scopecheck' e
+    v <- freshVarBind
+    say "Adding the substitution for the explicit binding and checking the codomain."
+    cod' <- addBinds (recSubsts ++ [(n, CVar v)]) $ scopecheck' cod
+    return $ CFun (CRef r sig) (CFun (CRef v e') cod')
+  SApp e impl e' -> do
+    say $ "Transforming application: " ++ show _e
+    e1 <- scopecheck' e
+    estr <- makeEstruct impl
+    e2 <- scopecheck' e'
+    return $ CApp (CApp e1 estr) e2
+  SLam impls expl e -> do
+    say $ "Transforming lambda abstraction: " ++ show _e
+    unique impls
+    e' <- scopecheck' e
+    return $ CLam (FL impls) expl e'
+  SWld -> say "Transforming wildcard..." >> return CWld
+    
+-- Auxiliary function to create record types
+makeSig :: [SBind] -> SCM CExpr
+makeSig bs = do
+  say "Converting implicit binds to a record type"
+  say "Checking that binds are locally unique"
+  unique $ bindsOf bs
+  CSig <$> go bs
+    where go :: [SBind] -> SCM [CBind]
+          go [] = return []
+          go (SBind n e: bs') = do
+            ce <- scopecheck' e
+            rm <- addBind (n,ce) $ go bs'
+            return $ CBind n ce : rm
+
+-- Helper extracting names from lists of bindings
+bindsOf :: [SBind] -> [N] 
+bindsOf = map (\(SBind n _) -> n)
+
+-- Auxiliary function to create expandable records
+makeEstruct :: [SAssign] -> SCM CExpr
+makeEstruct sa = CEStr <$> go [] sa
+  where go :: [Field] -> [SAssign] -> SCM [CAssign]
+        go taken as = case as of
+          SNamed n e : as' ->
+            if elem n taken
+            then throwError ("Duplicate field in assignment: " ++ n)
+            else do
+              e' <- scopecheck' e
+              rs <- go (n:taken) as'
+              return (CNamed n e' : rs)
+          SPos e : as' -> do
+            e' <- scopecheck' e
+            rs <- go taken as'
+            return (CPos e' : rs)
+
+-- Uniqueness test for elements of a list - failing on first repetition
+unique :: (Eq a,Show a) => [a] -> SCM ()
+unique ls = say ("Checking uniqueness for the elements: " ++ show ls) >> go [] ls
+  where go _ [] = void (say "All elements were unique")
+        go ex (x:xs) = if x `elem` ex
+                       then throwError $ "Duplicate element: " ++ show x ++ "!"
+                       else go (x:ex) xs

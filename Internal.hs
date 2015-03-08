@@ -139,11 +139,16 @@ instance Eq Constraint where
 
 instance Show Constraint where
   show c = case c of
-      ExpC g t phis tT -> "XP: " ++ par (show t ++ " <-- " ++ phis' ++ " |> " ++ show tT) ++ gm g
+      ExpC g t phis tT ->
+        "XP: " ++ par (show t ++ " <-- " ++ phis' ++ " |> " ++ show tT) ++ gm g
         where phis' = brace (intercalate "," (map show phis))
-      SubC g fs t -> "SB: " ++ par (show fs ++ " <_ " ++ show t) ++ gm g
-      PrjC g t _T t' _T' f -> "PR: " ++ par (show t ++ " : " ++ show _T ++ " <-- " ++ show t' ++ " : " ++ show _T' ++ "<" ++ f ++ ">") ++ gm g
-      EquC g _t _T _t' _T' -> "EQ: " ++ par (show _t ++ " <-- " ++ show _t' ++ " : " ++ show _T' ++ " = " ++ show _T) ++ gm g
+      SubC g fs t ->
+        "SB: " ++ par (show fs ++ " <_ " ++ show t) ++ gm g
+      PrjC g t _T t' _T' f ->
+        "PR: " ++ par (show t ++ " : " ++ show _T ++ " <-- "
+                       ++ show t' ++ " : " ++ show _T' ++ "<" ++ f ++ ">") ++ gm g
+      EquC g _t _T _t' _T' ->
+        "EQ: " ++ par (show _t ++ " <-- " ++ show _t' ++ " : " ++ show _T' ++ " = " ++ show _T) ++ gm g
     where gm g = "\n\t\915 = " ++ show g 
 --
 
