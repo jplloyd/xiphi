@@ -1,33 +1,17 @@
 module ScopeCheck where
 
+import DList
 import Surface as S
 import Core as C
+import Types
 
 import Data.Functor
-import Data.Monoid
 import Data.Tuple
 
 import Control.Monad.Trans.Writer
 import Control.Monad.State
 import Control.Monad.Reader
 import Control.Monad.Except
-
--- Basic type synonyms
-
-type Error = String
-
--- Difference list - used for writing out the progress
-newtype DList a = DL {getDlist :: [a] -> [a]}
-
-fromDList :: DList a -> [a]
-fromDList = ($ []) . getDlist
-
-toDList :: [a] -> DList a
-toDList ls = DL (ls++)
-
-instance Monoid (DList a) where
-  mempty = DL $ \xs -> [] ++ xs
-  mappend d1 d2 = DL $ getDlist d1 . getDlist d2
 
 -- Context and operations
 
@@ -65,7 +49,7 @@ addBind :: Substitution -> SCM a -> SCM a
 addBind s = local (s:)
 
 addBinds  :: [Substitution] -> SCM a -> SCM a
-addBinds ss = local (reverse ss ++)
+addBinds ss = local (ss ++)
 
 getSubstitute :: N -> SCM CExpr
 getSubstitute n = do
@@ -75,12 +59,6 @@ getSubstitute n = do
   let go (Just n') = say ("Found the replacement: " ++ show n') >> return n'
       go Nothing  = throwError $ "Referenced variable out of scope: " ++ n
   go cexpr
-
--- Error handling
-type ErrT = ExceptT Error
-
--- Scope checking logging
-type LogT = WriterT (DList Char)
 
 -- Substitution context
 type SubT = ReaderT Theta
@@ -119,7 +97,7 @@ scopecheck' _e = case _e of
     e' <- addBinds recSubsts $ scopecheck' e
     v <- freshVarBind
     say "Adding the substitution for the explicit binding and checking the codomain."
-    cod' <- addBinds (recSubsts ++ [(n, CVar v)]) $ scopecheck' cod
+    cod' <- addBinds ((n, CVar v):recSubsts) $ scopecheck' cod
     return $ CFun (CRef r sig) (CFun (CRef v e') cod')
   SApp e impl e' -> do
     say $ "Transforming application: " ++ show _e
@@ -130,9 +108,13 @@ scopecheck' _e = case _e of
   SLam impls expl e -> do
     say $ "Transforming lambda abstraction: " ++ show _e
     unique impls
-    e' <- scopecheck' e
-    return $ CLam (FL impls) expl e'
+    r <- freshRecBind
+    v <- freshVarBind
+    let recsubsts = (expl, CVar v) : map (\f -> (f, CProj (CVar r) f)) impls
+    e' <- addBinds recsubsts (scopecheck' e)
+    return $ CLam r (FL impls) v e'
   SWld -> say "Transforming wildcard..." >> return CWld
+
     
 -- Auxiliary function to create record types
 makeSig :: [SBind] -> SCM CExpr

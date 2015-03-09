@@ -36,16 +36,16 @@ instance Show CAssign where
     CNamed f e -> brace (show f ++ ":=" ++ show e)
 
 data CExpr = 
-   CCns Nm             -- Constant
- | CVar Ref         -- Variable
- | CSet                -- Type of types
- | CFun CBind CExpr    -- Dependent function type
- | CLam FList Nm CExpr -- Lambda abstraction
- | CApp CExpr CExpr    -- Application
- | CSig [CBind]        -- Record type
- | CEStr [CAssign]     -- Expandable record
- | CProj CExpr Field   -- Projection
- | CWld                -- Wildcard/underscore
+   CCns Nm                  -- Constant
+ | CVar Ref                 -- Variable
+ | CSet                     -- Type of types
+ | CFun CBind CExpr         -- Dependent function type
+ | CLam Ref FList Ref CExpr -- Lambda abstraction (bind, list of impl, expl bind, body)
+ | CApp CExpr CExpr         -- Application
+ | CSig [CBind]             -- Record type
+ | CEStr [CAssign]          -- Expandable record
+ | CProj CExpr Field        -- Projection
+ | CWld                     -- Wildcard/underscore
 
 data CSigma = CS [(Nm,CExpr)]
 
@@ -56,7 +56,7 @@ instance Show CExpr where
     CVar n -> show n
     CSet   -> "Set"
     CFun b e -> show b ++ " -> " ++ show e
-    CLam fs b e -> "\\" ++ show b ++ " -> " ++ show e
+    CLam r fs b e -> "\\" ++ par (show r ++ " : " ++ show fs) ++ show b ++ " -> " ++ show e
     CApp e1 e2 -> show e1 ++ " " ++ show e2
     CSig bs -> "sig" ++ brace (concatMap (strip . show) bs)
     CEStr asn -> "estr" ++ brace (intercalate "," (map (strip . show) asn))
