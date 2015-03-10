@@ -7,8 +7,8 @@ import Util
 import Types
 
 -- Synonyms for identifiers
-type N = String
-type F = String
+type Name = String
+type Field = String
 
 -- Synonyms for environments
 
@@ -19,18 +19,18 @@ type Sigma = Env String
 data Substitution = Sub Term Ref
   deriving (Eq,Ord)
 
-data IBind = IBind F Term
+data IBind = IBind Field Term
   deriving (Eq,Ord)
 
 -- Synonym used to mark when a term should be a type
 type Type = Term
 
 -- Named assignment 
-data Assign' = Ass F Term
+data Assign' = Ass Field Term
   deriving (Eq,Ord)
 
 -- Optionally named Assignment
-data Assign = Pos Term | Named F Term 
+data Assign = Pos Term | Named Field Term
   deriving (Eq,Ord)
 
 -- Typed optionally named assignment
@@ -40,14 +40,14 @@ data Phi = Phi Assign Type
 -- Term grammar
 data Term = 
    ISet
- | ICns N 
+ | ICns Name
  | IVar Ref
  | IFun (Ref,Type) Type
  | ILam (Ref,Term) Term
  | IApp Term Term
  | ISig [IBind]
  | IStruct [Assign']
- | IProj Term N 
+ | IProj Term Field
  | IMeta Meta [Substitution]
   deriving (Eq,Ord)
 
@@ -109,16 +109,21 @@ instance Show ContextConstraint where
 
 -- The constraint shapes without their variable contexts
 data Constraint =
-    ExpC Type [Phi] Term       -- T<Phi> => Y
-  | SubC Type [F]              -- T<fv>
-  | PrjC Type Term F Term Type -- T<t.f> => Y : X
-  | EquC Type Type Term Term   -- U = T ¦ X <- u
+    ExpC Type [Phi] Term           -- T<Phi> => Y
+  | SubC Type [Field]              -- T<fv>
+  | PrjC Type Term Field Term Type -- T<t.f> => Y : X
+  | EquC Type Type Term Term       -- U = T ¦ X <- u
   deriving (Eq,Ord)
 
--- Show instance out of date
 instance Show Constraint where
-  show c = "CONSTRAINT"
-
+  show c = case c of
+    ExpC _T phis _Y -> show _T ++ angBr (show phis) ++ rightDblArr ++ show _Y
+    SubC _T fs     -> show _T ++ angBr (show fs)
+    PrjC _T t f _Y _X -> show _T ++ angBr (show t ++ "." ++ f)
+                         ++ rightDblArr ++ " " ++ show _Y ++ " : " ++ show _X
+    EquC _U _T _X u -> par (show _U ++ " = " ++ show _T)
+                       ++ "\8224" ++  -- dagger
+                       par (show _X ++ "\8592" ++ show u)
 
 instance Show a => Show (Env a) where
   show (Env ls) = brack . intercalate ", " . reverse $ map go ls
@@ -130,8 +135,6 @@ instance Show Xi where
 
 
 
-
---
 -- Add a bind to an environment
 addBind :: (Ref,Term) -> Gamma -> Gamma
 addBind a (Env bs) = Env (a:bs)
