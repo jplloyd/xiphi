@@ -24,9 +24,13 @@ import Control.Monad.Trans.Writer
 -- The thing-in-itself -- takes a constant context and starts from a check on the given expression.
 -- Could alt. take two exprsesion and just elab one first - alternatives can be written when needed.
 elaborate :: Sigma -> CExpr -> Type -> (Log, Either Error Term)
-elaborate = undefined
-
-
+elaborate _Σ e _T = (eLog,term)
+  where errM = check e _T
+        logM = runExceptT errM
+        ctxM = runWriterT logM
+        mtsM = runReaderT ctxM (_Σ,Env [])
+        (term,eLog) = evalState mtsM emptyXi
+        
 -- Environment synonyms - typed constants and variables
 type TCEnv = (Sigma,Gamma)
 
@@ -43,6 +47,9 @@ gamma = snd
 -- state for meta/constraint store
 type TCM = ErrT (LogT (ReaderT TCEnv (State Xi)))
 
+
+-- ##    Logging    ##
+
 -- Simple logging - arbitrary strings
 say :: String -> TCM ()
 say s = lift $ tell (toDList (s ++ "\n"))
@@ -50,6 +57,9 @@ say s = lift $ tell (toDList (s ++ "\n"))
 -- Logging deferring to descriptions from a data type
 sayRule :: Rule -> TCM ()
 sayRule r = lift $ tell (toDList (show r ++ "\n"))
+
+
+-- ##  Context functions  ##
 
 -- Add a binding to Gamma
 addBind :: (Ref,Type) -> TCM a -> TCM a
@@ -70,11 +80,16 @@ lookupGamma n = lookupE n . gamma <$> ask >>= \mt -> maybeErr mt id errMsg
     where errMsg = "Variable reference" ++ show n ++ " not in scope!"
 
 
--- Genearl checking of an expression
+-- ##  Checking and equality  ##
+
+-- Check a core expression against a type
 check :: CExpr -> Type -> TCM Term
 check e _T = sayRule CheckGen >> do
   (_U,u) <- infer e
   genEq u _U _T
+
+(⇇) :: CExpr -> Type -> TCM Term
+(⇇) = check
 
 -- Equality will either resolve immediately through reflexivity - or generate an equality constraint
 -- even better would be to just check if they are wrong straight away (very much possible)
@@ -85,8 +100,7 @@ genEq u _U _T | _T == _U = sayRule EqRedRefl >> return u
                   addC (EquC _U _T _Y u)
                   return _Y
 
-(⇇) :: CExpr -> Type -> TCM Term
-(⇇) = check
+-- ##  Inference rules  ##
 
  -- ElabM will now have a reader for constants and possibly for Gamma as well
 infer :: CExpr -> TCM (Type,Term)
@@ -98,7 +112,7 @@ infer _e = case _e of
   CLam r i e b -> sayRule InferLam >> infLam r i e b
   CApp e1 e2   -> sayRule InferApp >> infApp e1 e2
   CSig bsd     -> infSig bsd
-  CEStr n      -> infEStr n
+  CEStr n      -> sayRule InferEStr >> infEStr n
   CProj e f    -> sayRule InferProj >> infProj e f
   CWld         -> sayRule InferWld >> infWld
 
@@ -134,7 +148,7 @@ subS :: FList -> TCM Type
 subS fl = do
   _X <- freshMeta ISet
   say "Generating subsequence constraint"
-  addC (SubC _X (getList fl)) -- the order here is questionable
+  addC (SubC _X (getList fl))
   return _X
 
 -- Elaborate an application
@@ -213,6 +227,9 @@ infWld = do -- swap <$> freshMetas
   (_Y,_X) <- freshMetas
   return (_X,_Y)
 
+
+-- ##  Xi-related operations  ##
+
 -- Generate a fresh metavariable of a given type
 freshMeta :: Type -> TCM Term
 freshMeta _T = sayRule FreshMeta >> do
@@ -242,6 +259,9 @@ addC :: Constraint -> TCM ()
 addC _C = sayRule AddConstraint >> do
   _Γ <- gamma <$> ask -- retrieve the current variable context
   modify (addConstraint (CConstr _Γ _C)) -- add the constraint to the store
+
+
+-- ##  Rule references ##
 
 -- Rules used in type checking - show instance will reference rules (eventually)
 data Rule =
@@ -327,8 +347,10 @@ structLookup' as f = go as
   where go [] = error $ "Attempted projection on nonexistent field: " ++ show f
         go (Ass f' t:as') = if f' == f then t else go as'
 
--- monadic versions, but these errors will only appear if programming in Core directly
 
+-- monadic versions, but these errors will only appear if programming in Core directly
+-- (no longer the work of the gentleman mentioned above).
+        
 sigLookup :: [IBind] -> Field -> TCM ([Field],Type)
 sigLookup bs f = go [] bs
   where go _ [] = throwError $ "Attempted type lookup for nonexistent field: " ++ show f
