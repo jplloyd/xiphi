@@ -15,14 +15,14 @@ type Sigma = Env String
 data Substitution = Sub Term Ref
   deriving (Eq,Ord)
 
-data IBind = IBind Field Term
+data IBind = IBind {ibF :: Field, ibTerm :: Term}
   deriving (Eq,Ord)
 
 -- Synonym used to mark when a term should be a type
 type Type = Term
 
 -- Named assignment 
-data Assign' = Ass Field Term
+data Assign' = Ass {assF :: Field, assTerm :: Term}
   deriving (Eq,Ord)
 
 -- Optionally named Assignment
@@ -129,6 +129,19 @@ instance Show Xi where
   show (Xi _ _ constrs metas') = surround "[[\n" "\n]]" (go constrs ++ "\n--===--\n\n" ++ go metas')
     where go = unlines . map show . reverse
 
+-- Check if a term is final (no metavariables), as should be the case post-unification
+isFinal :: Term -> Bool
+isFinal _t = case _t of
+   ISet -> True
+   ICns _ -> True
+   IVar _ -> True
+   IFun (_,t) t' -> isFinal t && isFinal t'
+   ILam (_,t) t' -> isFinal t && isFinal t'
+   IApp t1 t2 -> isFinal t1 && isFinal t2
+   ISig bs -> all isFinal (map ibTerm bs)
+   IStruct assn -> all isFinal (map assTerm assn)
+   IProj t _ -> isFinal t
+   IMeta _ _ -> False
 
 
 -- Add a bind to an environment
