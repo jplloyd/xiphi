@@ -6,10 +6,6 @@ import Data.List
 import Util
 import Types
 
--- Synonyms for identifiers
-type Name = String
-type Field = String
-
 -- Synonyms for environments
 
 type Gamma = Env Ref

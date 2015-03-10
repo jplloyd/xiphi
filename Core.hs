@@ -5,10 +5,6 @@ import Util
 import Types
 import Data.List
 
-type Name = String
-
-type Field = String
-
 newtype FList = FL {getList :: [Field]}
 
 -- type bindings for variables and records

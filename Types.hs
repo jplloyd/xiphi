@@ -5,6 +5,8 @@ import DList
 import Control.Monad.Except
 import Control.Monad.Trans.Writer
 
+type Field = String
+type Name = String
 type Error = String
 type Log = DList Char
 
