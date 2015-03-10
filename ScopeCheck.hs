@@ -92,13 +92,13 @@ scopecheck' _e = case _e of
     say ("Transforming the function type: " ++ show _e)
     sig@(CSig bs) <- makeSig impl
     r <- freshRecBind
-    let recSubsts = map (\(CBind n' _) -> (n', CProj (CVar r) n')) bs
+    let recSubsts = map (\(FBind n' _) -> (n', CProj (CVar r) n')) bs
     say "Adding substitutions for references to the implicits, then checking the explicit argument."
     e' <- addBinds recSubsts $ scopecheck' e
     v <- freshVarBind
     say "Adding the substitution for the explicit binding and checking the codomain."
     cod' <- addBinds ((n, CVar v):recSubsts) $ scopecheck' cod
-    return $ CFun (CRef r sig) (CFun (CRef v e') cod')
+    return $ CFun (CBind r sig) (CFun (CBind v e') cod')
   SApp e impl e' -> do
     say $ "Transforming application: " ++ show _e
     e1 <- scopecheck' e
@@ -123,12 +123,12 @@ makeSig bs = do
   say "Checking that binds are locally unique"
   unique $ bindsOf bs
   CSig <$> go bs
-    where go :: [SBind] -> SCM [CBind]
+    where go :: [SBind] -> SCM [FBind]
           go [] = return []
           go (SBind n e: bs') = do
             ce <- scopecheck' e
-            rm <- addBind (n,ce) $ go bs'
-            return $ CBind n ce : rm
+            rm <- addBind (n, CVar . field $ n) $ go bs'
+            return $ FBind n ce : rm
 
 -- Helper extracting names from lists of bindings
 bindsOf :: [SBind] -> [N] 

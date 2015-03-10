@@ -1,201 +1,340 @@
-{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TupleSections, FlexibleInstances, MultiParamTypeClasses #-}
 {-# OPTIONS -W -Wall #-}
 module Elaboration where
 
-import Core
+import DList
+import Core as C
+import Internal hiding (addBind,addBinds)
+import qualified Internal as I
+import Types
+import Util
 
+import Control.Arrow
+import Control.Applicative
+
+import Control.Monad.Except
 import Control.Monad.State
 import Control.Monad.Reader
+import Control.Monad.Trans.Writer
 
-import Internal(
-  Xi(..),
-  Gamma(..),
-  Term,
-  Meta(..),
-  Constraint(..),
-  Substitution(..),
-  Phi(..),
-  emptyXi,
-  addConstraint,
-  incMetaC,
-  addMeta,
-  lookupG,
-  addBind,
-  incBindC,
-  liftG)
 
-import qualified Internal as I
+-- Note that all terms are fully normalized at all stages expect during
+-- the normalization stage that is substitution (internally)
 
-type Type = Term
-type Constants = Gamma
+-- The thing-in-itself -- takes a constant context and starts from a check on the given expression.
+-- Could alt. take two exprsesion and just elab one first - alternatives can be written when needed.
+elaborate :: Sigma -> CExpr -> Type -> (Log, Either Error Term)
+elaborate = undefined
 
-type ElabM = ReaderT Constants ElabM'
-type ElabM' = State Xi
 
-elaborate :: Xi -> Constants -> Expr -> Type -> Term
-elaborate x c e t = flip evalState x . flip runReaderT c $ check (Gamma []) e t
+-- Environment synonyms - typed constants and variables
+type TCEnv = (Sigma,Gamma)
 
-elaborate' :: Constants -> Expr -> Type -> Term
-elaborate' = elaborate emptyXi
+sigma :: TCEnv -> Sigma
+sigma = fst
 
-check :: Gamma -> Expr -> Type -> ElabM Term
-check g e t = do
-  (typ,term) <- infer g e
-  genEq g term typ t
+gamma :: TCEnv -> Gamma
+gamma = snd
 
-infer :: Gamma -> Expr -> ElabM (Type, Term)
-infer g _e = case _e of
-  Set -> return (I.Set,I.Set)
-  Var n -> return (lookupG g n, I.Var n)
-  Cns n -> do
-    c <- ask
-    return (lookupG c n,I.Cns n)
-  Lam (Bind n e) e' -> do
-    term <- check g e I.Set
-    (cod,body) <- infer (addBind (n,term) g) e'
-    return (I.Fun (n, term) cod, I.Lam (n,term) body)
-  Fun (Bind n e) e' -> do
-    term <- check g e I.Set
-    cod <- check (addBind (n,term) g) e' I.Set
-    return (I.Set, I.Fun (n, term) cod)
-  App e1 e2 -> do
-    f@(I.Fun b@(x, dom) cod) <- getFunShape g
-    t1 <- check g e1 f
-    t2 <- check (addBind b g) e2 dom 
-    return (I.Subst cod (Sub t2 x), I.App t1 t2)
-  Sig bs -> inferSig g bs >>= \t -> return (I.Set,t)
-  LSig fs -> do
-    x <- genSubC g fs
-    return (I.Set, x)
-  EStr ass -> do
-    phis <- infPhi g ass
-    (t,_T) <- genExpC g phis
-    return (_T,t)
-  Proj e f -> do
-    (typ,term) <- infer g e
-    (u,uT) <- genProjC g term typ f
-    return (uT,u)
-  WCrd -> do
-    (y,x) <- freshMetas g
-    return (x,y)
+-- Type checking monad -
+-- error handling,
+-- progress logging,
+-- reader for constants and local variables,
+-- state for meta/constraint store
+type TCM = ErrT (LogT (ReaderT TCEnv (State Xi)))
 
-inferSig :: Gamma -> [Bind] -> ElabM Term
-inferSig g _bs = case _bs of 
-  [] -> return $ I.Sig []
-  (Bind n e : bs) -> do
-    t <- check g e I.Set
-    (I.Sig bs') <- inferSig (addBind (n,t) g) bs
-    return $ I.Sig (I.Bind n t : bs')
+-- Simple logging - arbitrary strings
+say :: String -> TCM ()
+say s = lift $ tell (toDList (s ++ "\n"))
 
-infPhi :: Gamma -> [Assign] -> ElabM [Phi]
-infPhi g = mapM go
-  where 
-    go (Pos e) = infer g e >>= \(_T,t) -> return $ Phi (I.Pos t) _T
-    go (Named f e) = infer g e >>= \(_T,t) -> return $ Phi (I.Named f t) _T
+-- Logging deferring to descriptions from a data type
+sayRule :: Rule -> TCM ()
+sayRule r = lift $ tell (toDList (show r ++ "\n"))
 
-genEq :: Gamma -> Term -> Type -> Type -> ElabM Term
-genEq g trm typ typ' = 
-  if (typ,typ') == (I.Set,I.Set)
-  then return trm
-  else do
-    m <- freshMeta g typ'
-    addConstr (EquC g m typ' trm typ)
-    return m
+-- Add a binding to Gamma
+addBind :: (Ref,Type) -> TCM a -> TCM a
+addBind b = local (second (I.addBind b))
+
+-- Add multiple bindings to Gamma
+addBinds :: [(Ref,Type)] -> TCM a -> TCM a
+addBinds bs = local (second (I.addBinds bs))
+
+-- Look up the type of a constant
+lookupSigma :: String -> TCM Type
+lookupSigma n = lookupE n . sigma <$> ask >>= \mt -> maybeErr mt id errMsg
+    where errMsg = "Constant reference" ++ show n ++ " not in scope!"
+
+-- Look up the type of a variable
+lookupGamma :: Ref -> TCM Type
+lookupGamma n = lookupE n . gamma <$> ask >>= \mt -> maybeErr mt id errMsg
+    where errMsg = "Variable reference" ++ show n ++ " not in scope!"
+
+
+-- Genearl checking of an expression
+check :: CExpr -> Type -> TCM Term
+check e _T = sayRule CheckGen >> do
+  (_U,u) <- infer e
+  genEq u _U _T
+
+-- Equality will either resolve immediately through reflexivity - or generate an equality constraint
+-- even better would be to just check if they are wrong straight away (very much possible)
+genEq :: Term -> Type -> Type -> TCM Term
+genEq u _U _T | _T == _U = sayRule EqRedRefl >> return u
+              | otherwise = sayRule EqRedGenC >> do
+                  _Y <- freshMeta _T
+                  addC (EquC _U _T _Y u)
+                  return _Y
+
+(⇇) :: CExpr -> Type -> TCM Term
+(⇇) = check
+
+ -- ElabM will now have a reader for constants and possibly for Gamma as well
+infer :: CExpr -> TCM (Type,Term)
+infer _e = case _e of
+  CCns n       -> sayRule InferCns >> infCons n
+  CVar r       -> sayRule InferVar >> infVar r
+  CSet         -> sayRule InferSet >> infSet
+  CFun b e     -> sayRule InferFun >> infFun b e
+  CLam r i e b -> sayRule InferLam >> infLam r i e b
+  CApp e1 e2   -> sayRule InferApp >> infApp e1 e2
+  CSig bsd     -> infSig bsd
+  CEStr n      -> infEStr n
+  CProj e f    -> sayRule InferProj >> infProj e f
+  CWld         -> sayRule InferWld >> infWld
+
+-- Elaborate a constant
+infCons :: String -> TCM (Type,Term)
+infCons k = (,ICns k) <$> lookupSigma k
+
+-- Elaborate a variable reference
+infVar :: Ref -> TCM (Type,Term)
+infVar x = (,IVar x) <$> lookupGamma x
+
+-- Elaborate the type of types
+infSet :: TCM (Type,Term)
+infSet = return (ISet,ISet)
+
+-- Elaborate function types
+infFun :: CBind -> CExpr -> TCM (Type,Term)
+infFun (CBind x _D) _E = do
+  _U <-                  _D ⇇ ISet
+  _V <- addBind (x,_U) $ _E ⇇ ISet
+  return (IFun (x,_U) _V,ISet)
+
+-- Elaborate an expandable Lambda
+infLam :: Ref -> FList -> Ref -> CExpr -> TCM (Type,Term)
+infLam r fv x e = do
+  _T <- subS fv
+  _U <- addBind (r,_T) $ freshMeta ISet
+  (_V,v) <- addBinds [(r,_T),(x,_U)] $ infer e
+  return (IFun (r, _T) (IFun (x,_U) _V),v)
+
+-- f ⊆ T - special subsequence constraint things
+subS :: FList -> TCM Type
+subS fl = do
+  _X <- freshMeta ISet
+  say "Generating subsequence constraint"
+  addC (SubC _X (getList fl)) -- the order here is questionable
+  return _X
+
+-- Elaborate an application
+infApp :: CExpr -> CExpr -> TCM (Type,Term)
+infApp e1 e2 = do
+  (_T,t) <- infer e1
+  (_U,u) <- infer e2
+  (v,_V) <- appAt (t,_T) (u,_U)
+  return (_V,v)
+
+-- (t : T)@(u : U) ~> v
+-- If the thing is a known function type - run the equality thingy right away
+appAt :: (Term,Type) -> (Term,Type) -> TCM (Term,Type)
+appAt (t, IFun (x, _U') _V) (u, _U) = sayRule AppKnown >> do
+  u' <- genEq u _U _U'
+  return (IApp t u', subst [Sub u' x] _V) -- a point of substitution
+appAt (t,_T) (u,_U) = sayRule AppUnknown >> do
+  x  <- freshBind 
+  _Y <- addBind (x,_U) $ freshMeta ISet
+  t' <- genEq t _T (IFun (x,_U) _Y)
+  return (IApp t' u, subst [Sub u x] _Y) -- subst can ofc be bypassed here
   
--- Operations on Xi
+-- Elaborate a record type
+-- This elaboration is very tedious when following the rules exactly
+infSig :: [FBind] -> TCM (Type,Term)
+infSig fs = case fs of 
+  [] -> sayRule InferRecB >> return (ISet, ISig [])
+  (FBind f _D : fs') -> sayRule InferRecC >> do
+    _U <-                                      _D ⇇ ISet
+    (ISig fbs) <- addBind (field f,_U) $ CSig fs' ⇇ ISet
+    return (ISet, ISig $ IBind f _U : fbs)
 
-freshMeta :: Gamma -> Type -> ElabM Term
-freshMeta g t = I.MetaTerm `fmap` newMeta g t
+-- Elaborate an expandable struct
+infEStr :: [CAssign] -> TCM (Type,Term)
+infEStr phiCs = do
+  phiIs <- mapM phiInf phiCs
+  genExp phiIs
+  
+-- Generate expansion constraints
+genExp :: [Phi] -> TCM (Type,Term)
+genExp phis = say "Generating expansion constraint" >> do
+  (_Y,_X) <- freshMetas
+  addC (ExpC _X phis _Y)
+  return (_X,_Y)
 
-freshMetas :: Gamma -> ElabM (Term, Type)
-freshMetas g = do
-  x <- freshMeta g I.Set
-  y <- freshMeta g x
-  return (y,x)
+-- Special elaboration of assignments
+phiInf :: CAssign -> TCM Phi
+phiInf phiC = say "Invoking special phi inference" >> do
+    (_V,_v) <- infer (getAExpr phiC)
+    return . flip Phi _V . maybe (Pos _v) (flip Named _v) $ getAField phiC
 
-newMeta :: Gamma -> Type -> ElabM Meta
-newMeta g t = do
-  xi <- get
-  let n = metaC xi
-  let nMeta = Meta ("_" ++ show n) t g
+-- Elaborate a projection
+infProj :: CExpr -> Field -> TCM (Type,Term)
+infProj e f = do
+  (_T,t) <- infer e
+  (v, _V) <- handleProj t f _T
+  return (_V,v)
+
+-- Either gnerate a projection constraint or handle the transformation directly
+handleProj :: Term -> Field -> Type -> TCM (Term,Type)
+handleProj t f _T = case _T of
+  (ISig fs ) -> do
+    say "Transforming projection type"
+    (fs',_U) <- sigLookup fs f
+    let proj = IProj t f
+    return (proj,subst (map (Sub proj . field) fs') _U) -- even more substitutions
+  _          -> do
+    say "Generating projection constraint"
+    (_Y,_X) <- freshMetas
+    addC (PrjC _T t f _Y _X)
+    return (_Y,_X)
+  
+-- Elaborate an unknown expression
+infWld :: TCM (Type,Term)
+infWld = do -- swap <$> freshMetas
+  (_Y,_X) <- freshMetas
+  return (_X,_Y)
+
+-- Generate a fresh metavariable of a given type
+freshMeta :: Type -> TCM Term
+freshMeta _T = sayRule FreshMeta >> do
+  metaIdx <- metaC <$> get
   modify incMetaC
-  modify (addMeta nMeta)
-  return nMeta
+  _Γ <- gamma <$> ask 
+  let meta = Meta metaIdx _T _Γ
+  return $ IMeta meta []
 
-addConstr :: Constraint -> ElabM ()
-addConstr c = modify (addConstraint c)
+-- Generate two fresh metavariables,
+-- the second being the type of the first
+freshMetas :: TCM (Term,Type)
+freshMetas = sayRule FreshMetas >> do
+  _X <- freshMeta ISet
+  _Y <- freshMeta _X
+  return (_Y,_X)
 
-getFunShape :: Gamma -> ElabM Type
-getFunShape g = do
-  dom <- freshMeta g I.Set
-  x <- freshBind
-  cod <- freshMeta (addBind (x,dom) g) I.Set
-  return $ I.Fun (x,dom) cod
-
-freshBind :: ElabM N
-freshBind = do
-  xi <- get
-  let b = "_x" ++ show (bindC xi)
+-- Guaranteed fresh bind (unknown binds are not created during scope checking)
+freshBind :: TCM Ref
+freshBind = say "Creating a fresh binding" >> do
+  bC <- bindC <$> get
   modify incBindC
-  return b
+  return $ V Unknown bC
 
-genProjC :: Gamma -> Term -> Type -> F -> ElabM (Term,Type)
-genProjC g term typ f = 
-  if sig typ then do
-    let substs = getSubsts f term typ
-    let fTyp = getSigT f typ
-    return (I.Proj term f, addSubsts fTyp substs)
-  else do
-    (y,x) <- freshMetas g
-    addConstr (PrjC g y x term typ f)
-    return (y,x)
+-- Add a constraint with current context to constraint store
+addC :: Constraint -> TCM ()
+addC _C = sayRule AddConstraint >> do
+  _Γ <- gamma <$> ask -- retrieve the current variable context
+  modify (addConstraint (CConstr _Γ _C)) -- add the constraint to the store
 
-genExpC :: Gamma -> [Phi] -> ElabM (Term,Type)
-genExpC g phis = do
-  (y,x) <- freshMetas g
-  addConstr (ExpC g y phis x)
-  return (y,x)
-
-genSubC :: Gamma -> [F] -> ElabM Term
-genSubC g fs = do
-  x <- freshMeta g I.Set
-  addConstr (SubC g fs x)
-  return x
-
--- Elaborate a list of constants to a new gamma with an associated meta store
-elabSigma :: CSigma -> ElabM [(N,Term)]
-elabSigma (CS cs) = go cs
-  where go [] = return []
-        go ((n,e): cs') = do -- let rems = go cs'; t = elaborate' consts e I.Set in (n,t) : rems
-          t <- check (Gamma []) e I.Set 
-          cs'' <- local (liftG ((n,t):)) (go cs')
-          return $ (n,t) : cs''
-
-
-
-
--- TEMPORARY SHIT DOWN HERE, BEWARE ITS TEMPORARY NATURE AND LOATHE ITS LACK OF ELEGANCE
-
--- temporary sig test
-sig :: Term -> Bool
-sig (I.Sig _) = True
-sig _       = False
-
-
-getSubsts :: N -> Term -> Term -> [Substitution]
-getSubsts f t (I.Sig bs) = map (\(I.Bind n _) -> Sub (I.Proj t n) n) (takeWhileInc (\(I.Bind n' _) -> n' /= f) bs)
-getSubsts _ _ _          = error "You dare try to extract precious substs from anything but a sig? Fool!"
+-- Rules used in type checking - show instance will reference rules (eventually)
+data Rule =
+   CheckGen -- Check/Eq stuff <
+ | EqRedRefl --               <
+ | EqRedGenC --               <
+-- ============================
+ | InferSet -- Basics < 
+ | InferCns --        <
+ | InferVar --        <
+ | InferWld --        <
+ | InferFun --        <
+ | InferRecB --       <
+ | InferRecC --       <
+-- ====================
+ | InferApp -- Applications <
+ | AppKnown --              <
+ | AppUnknown --            <
+-- ==========================
+ | InferLam -- Lambdas      <
+ | SubSeqGenC --            <
+-- ==========================
+ | InferEStr -- Exp. Struct <
+ | InferPhiS --             <
+ | ExpGenC --               <
+-- ==========================
+ | InferProj -- Projections <
+ | ProjRed --               <
+ | ProjGenC --              <
+-- ==========================
+ | FreshMeta -- Xi Operations <
+ | FreshMetas --              <
+ | AddConstraint --           <
+-- ============================
+  deriving Show
 
 
-getSigT :: N -> Term -> Term
-getSigT f _t@(I.Sig bs) = go bs
-  where go [] = error $ "There is no field "++ f ++ " in :" ++ show _t
-        go (I.Bind n t : bs') = if n == f then t else go bs'
-getSigT _ _ = error "There are no fields in non-sigs Mr. Clever esq."
+-- Substitution/Reduction -- The work of Eskil M Johànsen Esq.
 
-addSubsts :: Term -> [Substitution] -> Term
-addSubsts t sbs = if t == I.Set then I.Set else foldr (\s -> flip I.Subst s) t sbs
+type Ss = [Substitution]
 
-takeWhileInc :: (a -> Bool) -> [a] -> [a]
-takeWhileInc _ [] = []
-takeWhileInc p (x:xs) = if p x then x : takeWhileInc p xs else [x]
+-- ComputeSubst: Should always return a reduced term
+subst :: Ss -> Term -> Term
+subst ss = reduce . sp ss
+
+-- SubstProp: May return an unreduced term.
+-- Doesn't this feel like a functor operation? Ah well...
+sp :: Ss -> Term -> Term
+sp ss trm = case trm of
+  (IVar x)       -> sigma' ss x
+  (IFun (r,u) v) -> IFun (r,sp' u) (sp' v)
+  (ILam (r,u) v) -> ILam (r,sp' u) (sp' v)
+  (IApp t1 t2)   -> IApp (sp' t1) (sp' t2)
+  (ISig ibs)     -> ISig    $ map intoBindings ibs
+  (IStruct ass)  -> IStruct $ map intoAssignss ass
+  (IProj t f)    -> IProj (sp' t) f
+  (IMeta x olds) -> IMeta x (composeSubsts olds ss)
+  _ -> trm -- Set and constants
+ where sp' = sp ss
+       intoBindings (IBind n t) = IBind n $ sp' t
+       intoAssignss (Ass   n t) = Ass   n $ sp' t
+
+-- SigmaFun: Computes actual substitution on a variable
+sigma' :: Ss -> Ref -> Term
+sigma' ss x = case ss of
+  [] -> IVar x
+  (Sub t y : ss') -> if y == x then t else sigma' ss' x
+        
+-- Beware, front of the subst list is to the left! (Other way around in report.)
+composeSubsts :: Ss -> Ss -> Ss
+composeSubsts olds news = foldr lars news olds
+  where lars (Sub t n) = (Sub (subst news t) n :)
+
+-- Reduces a term using rules for projections and... Nothing more?
+reduce :: Term -> Term
+reduce t = case t of
+      (IProj (IStruct ass) f) -> reduce $ structLookup' ass f
+      _ -> t
+
+-- point of hard failure, tough
+structLookup' :: [Assign'] -> Field -> Term
+structLookup' as f = go as
+  where go [] = error $ "Attempted projection on nonexistent field: " ++ show f
+        go (Ass f' t:as') = if f' == f then t else go as'
+
+-- monadic versions, but these errors will only appear if programming in Core directly
+
+sigLookup :: [IBind] -> Field -> TCM ([Field],Type)
+sigLookup bs f = go [] bs
+  where go _ [] = throwError $ "Attempted type lookup for nonexistent field: " ++ show f
+        go prec (IBind f' _T : bs') = if f' == f then return (prec,_T) else go (f':prec) bs'
+
+structLookup :: [Assign'] -> Field -> TCM Term
+structLookup as f = go as
+  where go [] = throwError $ "Attempted projection on nonexistent field: " ++ show f
+        go (Ass f' t:as') = if f' == f then return t else go as'
