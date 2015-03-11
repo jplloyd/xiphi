@@ -18,13 +18,18 @@ import Prelude hiding (log)
 data ChkProb = ChkProb {constants :: [(N,SExpr)], term ::  SExpr, typ :: SExpr}
 
 -- would be easier to work with...
-data ChkProb' = ChkProb' [(N,Type)] SExpr Type
+data ChkProb' = ChkProb' [(Name,Type)] SExpr Type
+
+
+simplerprocess :: ChkProb' -> IO ()
+simplerprocess (ChkProb' posts eC _T) = undefined
+
 
 -- Don't look at it right now
 process :: ChkProb -> IO ()
 process prob = do
     let result = processProb prob
-    either (\err -> putStrLn "A scope checking error occured" >> putStrLn err) (handle) result
+    either (\err -> putStrLn "A scope checking error occured" >> putStrLn err) handle result
   where handle (log,xi,expr,result) = do
           putStrLn (fromDList log)
           either (\err -> putStrLn "An elaboration error occured" >> putStrLn err) (handle' expr) result
@@ -34,12 +39,13 @@ process prob = do
           printSurface (constants prob) (typ prob) (term prob)
           printCore expr
           putStrLn " == Postulates == "
-          putStrLn $ concatMap printPost posts
+          putStrLn $ concatMap printPost' posts
           putStrLn " == Elab type == "
-          print typ'
+          putStrLn . showTerm $ typ'
           putStrLn " == Elab term == "
-          print trm
+          putStrLn . showTerm $ trm
         printPost (n,typ') = n ++ " : " ++ show typ' ++ "\n"
+        printPost' (n,typ') = n ++ " : " ++ showTerm typ' ++ "\n" ++ n ++ " : " ++ show typ' ++ "\n"
         printSurface psts typ' trm = do
           putStrLn "-- surface postulates"
           putStrLn $ concatMap printPost psts

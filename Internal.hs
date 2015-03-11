@@ -16,14 +16,14 @@ data Substitution = Sub Term Ref
   deriving (Eq,Ord)
 
 data IBind = IBind {ibF :: Field, ibTerm :: Term}
-  deriving (Eq,Ord)
+  deriving (Eq,Ord,Show)
 
 -- Synonym used to mark when a term should be a type
 type Type = Term
 
 -- Named assignment 
 data Assign' = Ass {assF :: Field, assTerm :: Term}
-  deriving (Eq,Ord)
+  deriving (Eq,Ord,Show)
 
 -- Optionally named Assignment
 data Assign = Pos Term | Named Field Term
@@ -45,7 +45,7 @@ data Term =
  | IStruct [Assign']
  | IProj Term Field
  | IMeta Meta [Substitution]
-  deriving (Eq,Ord)
+  deriving (Eq,Ord,Show)
 
 -- Metavariable with a name, type and static variable context
 data Meta = Meta Int Type Gamma
@@ -65,43 +65,48 @@ liftE f (Env ls) = Env (f ls)
 
 --- Show instances
 instance Show Phi where
-  show (Phi assn t) = show assn ++ " : " ++ show t
+  show (Phi assn t) = showAsgn assn ++ " : " ++ showTerm t
 
-instance Show Term where
-  show _t = case _t of
+showTerm :: Term -> String
+showTerm _t = case _t of
    ISet -> "Set"
    ICns n -> "<"++n++">"
-   IVar n -> show n
-   IFun (n,t) t' -> par (show n ++ " : " ++ show t) ++ arrowRight ++ show t'
-   ILam (n,t) t' -> "\\" ++ par (show n ++ " : " ++ show t) ++ arrowRight ++ show t'
-   IApp t1 t2 -> show t1 ++ " " ++ show t2
-   ISig bs -> "sig" ++ brace (intercalate "," (map show bs))
-   IStruct assn -> "struct" ++ brace (intercalate "," (map show assn))
-   IProj t n -> show t ++ "." ++ n
+   IVar n -> showRef n
+   IFun (n,t) t' -> par (showRef n ++ " : " ++ showTerm t) ++ arrowRight ++ showTerm t'
+   ILam (n,t) t' -> "\\" ++ par (showRef n ++ " : " ++ showTerm t) ++ arrowRight ++ showTerm t'
+   IApp t1 t2 -> showTerm t1 ++ " " ++ showTerm t2
+   ISig bs -> "sig" ++ brace (intercalate "," (map showIB bs))
+   IStruct assn -> "struct" ++ brace (intercalate "," (map showAsgn' assn))
+   IProj t n -> showTerm t ++ "." ++ n
    IMeta (Meta n _ _) sb -> "_" ++ show n ++ if null sb then "" else " " ++ show sb
 
 instance Show Meta where
-  show (Meta n t g) = par ("_" ++ show n ++ " : " ++ show t) ++ "\n\t\915 = " ++ show g
+  show (Meta n _ _) = "_" ++ show n
 
-instance Show IBind where
-  show (IBind n t) = n ++ " : " ++ show t
+showMeta :: Meta -> String
+showMeta (Meta n t g) = par ("_" ++ show n ++ " : " ++ showTerm t) ++ "\n\t\915 = " ++ showGamma g
 
-instance Show Assign where
-  show (Pos t) = show t
-  show (Named n t) = n ++ " := " ++ show t
+showIB :: IBind -> String
+showIB (IBind n t) = n ++ " : " ++ showTerm t
 
-instance Show Assign' where
-  show (Ass n t) = n ++ " := " ++ show t
+showAsgn :: Assign -> String
+showAsgn (Pos t) = showTerm t
+showAsgn (Named n t) = n ++ " := " ++ showTerm t
+
+
+showAsgn' :: Assign' -> String
+showAsgn' (Ass n t) = n ++ " := " ++ showTerm t
+
 
 instance Show Substitution where
-  show (Sub t n) = show t ++ " / " ++ show n
+  show (Sub t n) = showTerm t ++ " / " ++ showRef n
 
 -- Constraints and contexts
 
 data ContextConstraint = CConstr Gamma Constraint
 
 instance Show ContextConstraint where
-  show (CConstr g c) =  show c ++ "\n\t\915 = " ++ show g
+  show (CConstr g c) =  show c ++ "\n\t\915 = " ++ showGamma g
 
 -- The constraint shapes without their variable contexts
 data Constraint =
@@ -113,21 +118,26 @@ data Constraint =
 
 instance Show Constraint where
   show c = case c of
-    ExpC _T phis _Y -> "XP " ++ show _T ++ angBr (show phis) ++ rightDblArr ++ show _Y
-    SubC _T fs     -> "SB " ++ show _T ++ angBr (show fs)
-    PrjC _T t f _Y _X -> "PR " ++ show _T ++ angBr (show t ++ "." ++ f)
-                         ++ rightDblArr ++ " " ++ show _Y ++ " : " ++ show _X
-    EquC _U _T _X u -> "EQ " ++ par (show _U ++ " = " ++ show _T)
+    ExpC _T phis _Y -> "XP " ++ showTerm _T ++ angBr (show phis) ++ rightDblArr ++ showTerm _Y
+    SubC _T fs     -> "SB " ++ showTerm _T ++ angBr (show fs)
+    PrjC _T t f _Y _X -> "PR " ++ showTerm _T ++ angBr (showTerm t ++ "." ++ f)
+                         ++ rightDblArr ++ " " ++ showTerm _Y ++ " : " ++ showTerm _X
+    EquC _U _T _X u -> "EQ " ++ par (showTerm _U ++ " = " ++ showTerm _T)
                        ++ "\8224" ++  -- dagger
-                       par (show _X ++ arrowLeft ++ show u)
+                       par (showTerm _X ++ arrowLeft ++ showTerm u)
+
+showGamma (Env ls) = brack . intercalate ", " . reverse $ map go ls
+    where go (n,t) = showRef n ++ " : " ++ showTerm t
+
 
 instance Show a => Show (Env a) where
   show (Env ls) = brack . intercalate ", " . reverse $ map go ls
-    where go (n,t) = show n ++ " : " ++ show t
+    where go (n,t) = show n ++ " : " ++ showTerm t
 
 instance Show Xi where
-  show (Xi _ _ constrs metas') = surround "[[\n" "\n]]\n" ("\n== Constraints == \n\n" ++ go constrs ++ "\n== Metavariables ==\n\n" ++ go metas') ++ summary
+  show (Xi _ _ constrs metas') = surround "[[\n" "\n]]\n" ("\n== Constraints == \n\n" ++ go constrs ++ "\n== Metavariables ==\n\n" ++ go1 metas') ++ summary
     where go = unlines . map show . reverse
+          go1 = unlines . map showMeta . reverse
           summary = "Number of metas: " ++ show (length metas') ++ "\nNumber of constraints: " ++ show (length constrs)
 
 -- Check if a term is final (no metavariables), as should be the case post-unification

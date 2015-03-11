@@ -19,11 +19,11 @@ type LogT = WriterT Log
 -- #### Non-field bindings and references ####
 
 data RefType = VarBind | RecBind | Unknown
-  deriving (Eq,Ord)
+  deriving (Eq,Ord,Show)
 
 data Ref = V RefType Int
          | F String
-  deriving (Eq,Ord)
+  deriving (Eq,Ord,Show)
 
 var :: Int -> Ref
 var = V VarBind
@@ -35,10 +35,10 @@ field :: String -> Ref
 field = F
 
 refBinding :: Ref -> String
-refBinding = show
+refBinding = showRef
 
-instance Show Ref where
-  show (V c n) = toChar c:(map cUnd . show) n
+showRef :: Ref -> String
+showRef (V c n) = toChar c:(map cUnd . show) n
     where toChar b = case b of 
                  VarBind -> 'v'
                  RecBind -> 'r'
