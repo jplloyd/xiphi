@@ -39,7 +39,36 @@ elaborate' _Σ e _T = (eLog,xi,term)
         mtsM = runReaderT ctxM (_Σ,Env [])
         ((term,eLog),xi) = runState mtsM emptyXi
 
-        
+elabProblem :: [(Name,CExpr)] -> CExpr -> CExpr -> (Log, Xi, Either Error ([(Name,Type)],Type,Term))
+elabProblem posts typ trm = (eLog,xi,term)
+  where errM = checkProblem posts typ trm
+        logM = runExceptT errM
+        ctxM = runWriterT logM
+        mtsM = runReaderT ctxM (Env [],Env [])
+        ((term,eLog),xi) = runState mtsM emptyXi
+
+checkPostulates :: [(Name,CExpr)] -> TCM Sigma
+checkPostulates = go
+  where go [] = return (Env [])
+        go ((n,e):rs) = do
+          say "##############################"
+          say $ "Checking the postulate " ++ n
+          say "##############################"
+          t <- check e ISet
+          say $ "Adding " ++ n ++ " to Sigma"
+          (Env ls) <- local (first (liftE ((n,t):))) $ go rs
+          return (Env $ (n,t):ls)
+
+checkProblem :: [(Name,CExpr)] -> CExpr -> CExpr -> TCM ([(Name,Type)],Type,Term)
+checkProblem posts typ trm = do
+  sigm@(Env ls) <- checkPostulates posts
+  say $ "Problem : Checking that " ++ show typ  ++ "is a type"
+  type' <- local (first (const sigm)) $ check typ ISet
+  say "Problem : Checking the expression against the type"
+  term <- local (first (const sigm)) $ check trm type'
+  return (ls,type',term)
+
+
 -- Environment synonyms - typed constants and variables
 type TCEnv = (Sigma,Gamma)
 
@@ -267,6 +296,7 @@ freshBind = say "Creating a fresh binding" >> do
 addC :: Constraint -> TCM ()
 addC _C = sayRule AddConstraint >> do
   _Γ <- gamma <$> ask -- retrieve the current variable context
+  say $ "Creating a constraint with this context: " ++ show _Γ
   modify (addConstraint (CConstr _Γ _C)) -- add the constraint to the store
 
 
