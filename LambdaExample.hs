@@ -12,12 +12,13 @@ emono = fun dSet SSet
 -- Postulates
 postulates =
   [(_Eq, funASet dA (fun dA SSet))
-  ,(_refl, funASet baA (appEq va va))
+  ,(_refl, funBSet baB (appEq va va))
   ,(_w, fun bbBool (fun dappEq_vb_true (fun difb SSet)))
   ,(_f, fun bbBool (fun difb (fun dappEq_vb_true SSet)))
   ]
 
 -- Type checking problems
+simple = ChkProb (take 2 postulates) SSet SSet
 works = ChkProb postulates (eapp3 cw SWld refl_Wld eid) SSet
 fails = ChkProb postulates (eapp3 cf SWld eid refl_Wld) SSet
 
@@ -26,6 +27,7 @@ fails = ChkProb postulates (eapp3 cf SWld eid refl_Wld) SSet
 _Eq = "Eq"
 _refl = "refl"
 _A = "A"
+_B = "B"
 _a = "a"
 _w = "w"
 _f = "f"
@@ -42,6 +44,7 @@ cf = SCns _f
 
 -- Variables
 vA = SVar _A
+vB = SVar _B
 va = SVar _a
 vx = SVar _x
 vz = SVar _z
@@ -49,7 +52,9 @@ vb = SVar _b
 
 -- Bindings
 bASet = SBind _A SSet
+bBSet = SBind _B SSet
 baA = SBind _a vA
+baB = SBind _a vB
 bbBool = SBind _b eBool
 
 -- Dummy bindings
@@ -77,3 +82,5 @@ dummy = SBind "£"
 
 funASet = SFun [bASet]
 fun = SFun []
+
+funBSet = SFun [bBSet]
