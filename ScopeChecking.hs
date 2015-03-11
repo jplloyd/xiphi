@@ -1,4 +1,4 @@
-module ScopeCheck where
+module ScopeChecking where
 
 import DList
 import Surface as S
@@ -75,11 +75,11 @@ say s = lift $ tell (toDList (s++"\n"))
 
 -- Initate scope checking
 -- This can easily be written on one line, and anyone doing so will quickly regret it
-scopecheck :: SExpr -> (DList Char,Either Error CExpr)
+scopecheck :: SExpr -> (Log,Either Error CExpr)
 scopecheck e = swap res4
   where res1 = runExceptT . scopecheck' $ e
         res2 = runWriterT res1
-        res3 = runReaderT res2 []    
+        res3 = runReaderT res2 []
         res4 = evalState res3 emptyC
 
 -- Scope checking within the SCM monad
@@ -139,6 +139,7 @@ makeEstruct :: [SAssign] -> SCM CExpr
 makeEstruct sa = CEStr <$> go [] sa
   where go :: [Field] -> [SAssign] -> SCM [CAssign]
         go taken as = case as of
+          [] -> return []
           SNamed n e : as' ->
             if elem n taken
             then throwError ("Duplicate field in assignment: " ++ n)

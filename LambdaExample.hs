@@ -1,6 +1,7 @@
 module LambdaExample (works,fails) where
 
 import Surface
+import CheckHub
 
 eBool = fun dSet (fun dSet SSet)
 etrue = elam2 _x _y vx

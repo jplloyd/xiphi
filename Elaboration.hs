@@ -1,4 +1,4 @@
-{-# LANGUAGE TupleSections, FlexibleInstances, MultiParamTypeClasses #-}
+{-# LANGUAGE TupleSections #-}
 {-# OPTIONS -W -Wall #-}
 module Elaboration where
 
@@ -30,6 +30,15 @@ elaborate _Σ e _T = (eLog,term)
         ctxM = runWriterT logM
         mtsM = runReaderT ctxM (_Σ,Env [])
         (term,eLog) = evalState mtsM emptyXi
+
+elaborate' :: Sigma -> CExpr -> Type -> (Log, Xi, Either Error Term)
+elaborate' _Σ e _T = (eLog,xi,term)
+  where errM = check e _T
+        logM = runExceptT errM
+        ctxM = runWriterT logM
+        mtsM = runReaderT ctxM (_Σ,Env [])
+        ((term,eLog),xi) = runState mtsM emptyXi
+
         
 -- Environment synonyms - typed constants and variables
 type TCEnv = (Sigma,Gamma)

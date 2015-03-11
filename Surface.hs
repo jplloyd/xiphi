@@ -7,8 +7,6 @@ type N = String
 data SBind = SBind N SExpr
 data SAssign = SPos SExpr | SNamed N SExpr
 
-data ChkProb = ChkProb [(N,SExpr)] SExpr SExpr
-
 -- Expressions in the surface language
 data SExpr = 
    SSet 
