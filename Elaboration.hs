@@ -39,8 +39,8 @@ elaborate' _Σ e _T = (eLog,xi,term)
         mtsM = runReaderT ctxM (_Σ,Env [])
         ((term,eLog),xi) = runState mtsM emptyXi
 
-elabProblem :: [(Name,CExpr)] -> CExpr -> CExpr -> (Log, Xi, Either Error ([(Name,Type)],Type,Term))
-elabProblem posts typ trm = (eLog,xi,term)
+elabProblem :: [(Name,CExpr)] -> CExpr -> CExpr -> (Log, Xi, ([(Name,CExpr)], CExpr,CExpr), Either Error ([(Name,Type)],Type,Term))
+elabProblem posts typ trm = (eLog,xi,(posts,typ,trm),term)
   where errM = checkProblem posts typ trm
         logM = runExceptT errM
         ctxM = runWriterT logM
@@ -62,9 +62,9 @@ checkPostulates = go
 checkProblem :: [(Name,CExpr)] -> CExpr -> CExpr -> TCM ([(Name,Type)],Type,Term)
 checkProblem posts typ trm = do
   sigm@(Env ls) <- checkPostulates posts
-  say $ "Problem : Checking that " ++ show typ  ++ "is a type"
+  say $ "## PROBLEM STEP ## : Checking that " ++ show typ  ++ " is a type"
   type' <- local (first (const sigm)) $ check typ ISet
-  say "Problem : Checking the expression against the type"
+  say "## PROBLEM STEP ## : Checking the expression against the type"
   term <- local (first (const sigm)) $ check trm type'
   return (ls,type',term)
 

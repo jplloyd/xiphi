@@ -2,11 +2,12 @@
 module CheckHub where
 
 import Surface
+import Core
 import ScopeChecking
 import Elaboration
 import Internal
 import Types
-
+import DList
 
 import Control.Applicative
 import Prelude hiding (log)
@@ -19,15 +20,19 @@ data ChkProb = ChkProb {constants :: [(N,SExpr)], term ::  SExpr, typ :: SExpr}
 -- would be easier to work with...
 data ChkProb' = ChkProb' [(N,Type)] SExpr Type
 
+-- Don't look at it right now
 process :: ChkProb -> IO ()
 process prob = do
     let result = processProb prob
     either (\err -> putStrLn "A scope checking error occured" >> putStrLn err) (handle) result
-  where handle (log,xi,result) = do
-          either (\err -> putStrLn "An elaboration error occured" >> putStrLn err) (handle') result
+  where handle (log,xi,expr,result) = do
+          putStrLn (fromDList log)
+          either (\err -> putStrLn "An elaboration error occured" >> putStrLn err) (handle' expr) result
           putStrLn " == Meta Context =="
           print xi
-        handle' (posts,typ',trm) = do
+        handle' expr (posts,typ',trm) = do
+          printSurface (constants prob) (typ prob) (term prob)
+          printCore expr
           putStrLn " == Postulates == "
           putStrLn $ concatMap printPost posts
           putStrLn " == Elab type == "
@@ -35,11 +40,25 @@ process prob = do
           putStrLn " == Elab term == "
           print trm
         printPost (n,typ') = n ++ " : " ++ show typ' ++ "\n"
+        printSurface psts typ' trm = do
+          putStrLn "-- surface postulates"
+          putStrLn $ concatMap printPost psts
+          putStrLn "-- surface type"
+          print typ'
+          putStrLn "-- surface term"
+          print trm
+        printCore (psts,typ',trm) = do
+          putStrLn "-- core postulates"
+          putStrLn $ concatMap printPost psts
+          putStrLn "-- core type"
+          print typ'
+          putStrLn "-- core term"
+          print trm
 
 -- remaining-- - correctness of subst comp implementation
 -- - options for printing different logs - store all logs up until possible errors (tedious)
 
-processProb :: ChkProb -> Either Error (Log, Xi, Either Error ([(Name,Type)],Type,Term))
+processProb :: ChkProb -> Either Error (Log, Xi, ([(Name,CExpr)], CExpr,CExpr), Either Error ([(Name,Type)],Type,Term))
 processProb prob = go (unzip (constants prob)) (typ prob) (term prob)
-  where go (ns,pstS) typS trmS =  elabProblem <$> zip ns <$> mapM ssnd pstS <*> ssnd typS <*> ssnd trmS
+  where go (ns,pstS) typS trmS =  elabProblem <$> (zip ns <$> mapM ssnd pstS) <*> ssnd typS <*> ssnd trmS
         ssnd = snd . scopecheck -- we don't care about the scope checking logs
