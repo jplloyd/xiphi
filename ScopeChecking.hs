@@ -75,12 +75,23 @@ say s = lift $ tell (toDList (s++"\n"))
 
 -- Initate scope checking
 -- This can easily be written on one line, and anyone doing so will quickly regret it
+
 scopecheck :: SExpr -> (Log,Either Error CExpr)
-scopecheck e = swap res4
-  where res1 = runExceptT . scopecheck' $ e
+scopecheck e = _scopecheck (scopecheck' e)
+
+_scopecheck :: SCM a -> (Log,Either Error a)
+_scopecheck e = swap res4
+  where res1 = runExceptT e
         res2 = runWriterT res1
         res3 = runReaderT res2 []
         res4 = evalState res3 emptyC
+
+scopecheckProb :: [SExpr] -> SExpr -> SExpr -> (Log, Either Error ([CExpr], CExpr,CExpr))
+scopecheckProb postS typ trm = _scopecheck $ do
+  postC <- mapM scopecheck' postS
+  typC <- scopecheck' typ
+  trmC <- scopecheck' trm
+  return (postC,typC,trmC)
 
 -- Scope checking within the SCM monad
 scopecheck' :: SExpr -> SCM CExpr

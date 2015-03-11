@@ -60,5 +60,5 @@ process prob = do
 
 processProb :: ChkProb -> Either Error (Log, Xi, ([(Name,CExpr)], CExpr,CExpr), Either Error ([(Name,Type)],Type,Term))
 processProb prob = go (unzip (constants prob)) (typ prob) (term prob)
-  where go (ns,pstS) typS trmS =  elabProblem <$> (zip ns <$> mapM ssnd pstS) <*> ssnd typS <*> ssnd trmS
-        ssnd = snd . scopecheck -- we don't care about the scope checking logs
+  where go (ns,pstS) typS trmS = ccurr ns elabProblem <$> snd (scopecheckProb pstS typS trmS)
+        ccurr ns f (a,b,c) = f (zip ns a) b c
