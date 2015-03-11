@@ -39,7 +39,7 @@ data Term =
  | ICns Name
  | IVar Ref
  | IFun (Ref,Type) Type
- | ILam (Ref,Term) Term
+ | ILam (Ref,Type) Term
  | IApp Term Term
  | ISig [IBind]
  | IStruct [Assign']
@@ -73,8 +73,8 @@ showTerm _t = case _t of
    ICns n -> "<"++n++">"
    IVar n -> showRef n
    IFun (n,t) t' -> par (showRef n ++ " : " ++ showTerm t) ++ arrowRight ++ showTerm t'
-   ILam (n,t) t' -> "\\" ++ par (showRef n ++ " : " ++ showTerm t) ++ arrowRight ++ showTerm t'
-   IApp t1 t2 -> showTerm t1 ++ " " ++ showTerm t2
+   ILam (n,t) t' -> par $ "\\" ++ par (showRef n ++ " : " ++ showTerm t) ++ arrowRight ++ showTerm t'
+   IApp t1 t2 -> par (showTerm t1) ++ " " ++ showTerm t2
    ISig bs -> "sig" ++ brace (intercalate "," (map showIB bs))
    IStruct assn -> "struct" ++ brace (intercalate "," (map showAsgn' assn))
    IProj t n -> showTerm t ++ "." ++ n
@@ -84,7 +84,7 @@ instance Show Meta where
   show (Meta n _ _) = "_" ++ show n
 
 showMeta :: Meta -> String
-showMeta (Meta n t g) = par ("_" ++ show n ++ " : " ++ showTerm t) ++ "\n\t\915 = " ++ showGamma g
+showMeta (Meta n t g) = par ("_" ++ show n ++ " : " ++ showTerm t) -- ++ "\n\t\915 = " ++ showGamma g
 
 showIB :: IBind -> String
 showIB (IBind n t) = n ++ " : " ++ showTerm t
@@ -106,7 +106,7 @@ instance Show Substitution where
 data ContextConstraint = CConstr Gamma Constraint
 
 instance Show ContextConstraint where
-  show (CConstr g c) =  show c ++ "\n\t\915 = " ++ showGamma g
+  show (CConstr g c) =  show c -- ++ "\n\t\915 = " ++ showGamma g
 
 -- The constraint shapes without their variable contexts
 data Constraint =

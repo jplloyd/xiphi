@@ -57,8 +57,8 @@ instance Show CExpr where
     CVar n -> show n
     CSet   -> "Set"
     CFun b e -> show b ++ arrowRight ++ show e
-    CLam r fs b e -> "\\" ++ par (show r ++ " : " ++ show fs) ++ show b ++ arrowRight ++ show e
-    CApp e1 e2 -> show e1 ++ " " ++ show e2
+    CLam r fs b e -> par $ "\\" ++ par (show r ++ " : " ++ show fs) ++ show b ++ arrowRight ++ show e
+    CApp e1 e2 -> par (show e1) ++ " " ++ show e2
     CSig bs -> "sig" ++ brace (concatMap (strip . show) bs)
     CEStr asn -> "estr" ++ brace (intercalate "," (map (strip . show) asn))
     CProj e f -> show e ++"."++ f
