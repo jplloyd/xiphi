@@ -179,7 +179,7 @@ infLam r fv x e = do
   _T <- subS fv
   _U <- addBind (r,_T) $ freshMeta ISet
   (_V,v) <- addBinds [(r,_T),(x,_U)] $ infer e
-  return (IFun (r, _T) (IFun (x,_U) _V),v)
+  return (IFun (r, _T) (IFun (x,_U) _V), ILam (r,_T) (ILam (x,_U) v))
 
 -- f ⊆ T - special subsequence constraint things
 subS :: FList -> TCM Type
