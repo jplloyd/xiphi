@@ -2,6 +2,10 @@ module LambdaExample (works,fails) where
 
 import Surface
 import CheckHub
+import Internal
+import Types
+import CalcLamSol
+
 
 eBool = fun dSet (fun dSet SSet)
 etrue = elam2 _x _y vx
@@ -15,17 +19,24 @@ postulates =
   ,(_refl, funBSet baB (appEq va va))
   ,(_w, fun bbBool (fun dappEq_vb_true (fun difb SSet)))
   ,(_f, fun bbBool (fun difb (fun dappEq_vb_true SSet)))
+  ,(_works, eapp3 cw SWld refl_Wld eid)
   ]
 
 -- Type checking problems
-simple = ChkProb (take 2 postulates) SSet SSet
-works = ChkProb postulates (eapp3 cw SWld refl_Wld eid) SSet
+simple = ChkProb (take 5 postulates) SSet SSet
+works = ChkProb postulates worksDef SSet
 fails = ChkProb postulates (eapp3 cf SWld eid refl_Wld) SSet
 
+worksDef = (eapp3 cw SWld refl_Wld eid)
+
+postTypes = [Just _EqType, Just reflType, Just wType, Just fType]
+
+opt = OCP (zip postulates postTypes) worksDef (SSet,Nothing)
 
 -- Identifiers
 _Eq = "Eq"
 _refl = "refl"
+_works = "works"
 _A = "A"
 _B = "B"
 _a = "a"

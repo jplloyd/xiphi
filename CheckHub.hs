@@ -9,6 +9,7 @@ import Internal
 import Types
 import DList
 
+import Control.Arrow
 import Control.Applicative
 import Prelude hiding (log)
 
@@ -17,12 +18,12 @@ import Prelude hiding (log)
 -- constants (in order) and have to be fully type checked
 data ChkProb = ChkProb {constants :: [(N,SExpr)], term ::  SExpr, typ :: SExpr}
 
--- would be easier to work with...
-data ChkProb' = ChkProb' [(Name,Type)] SExpr Type
-
-
-simplerprocess :: ChkProb' -> IO ()
-simplerprocess (ChkProb' posts eC _T) = undefined
+-- So this is what we want to have: a set of postulates, an expression and a type in Surface,
+-- and a set of optional postulate-replacements in Internal, providing the ability to instantiate things manually
+-- the type in Surface should also be replaceable eventually
+data OptChkProb = OCP {posts :: [((N,SExpr), Maybe Type)],
+                       termS :: SExpr, 
+                       typeS :: (SExpr,Maybe Type)}
 
 
 -- Don't look at it right now
@@ -61,10 +62,35 @@ process prob = do
           putStrLn "-- core term"
           print trm
 
--- remaining-- - correctness of subst comp implementation
--- - options for printing different logs - store all logs up until possible errors (tedious)
+-- (Log, Xi, ([(Name,CExpr)], CExpr,CExpr), Either Error ([(Name,Type)],Type,Term))
+-- Temporary, allegedly
+processOpt :: OptChkProb -> IO ()
+processOpt prob = do
+    let result = processOptProb prob
+    either (\err -> putStrLn "A scope checking error occured" >> putStrLn err) handle result
+  where handle (log,xi,expr,result) = do
+          putStrLn (fromDList log)
+          either (\err -> putStrLn "An elaboration error occured" >> putStrLn err) (handle' expr) result
+          putStrLn " == Meta Context =="
+          print xi
+        handle' :: ([(Name,CExpr)], CExpr,CExpr) -> ([(Name,Type)],Type,Term) -> IO ()
+        handle' expr (posts,typ',trm) = do
+          putStrLn " == Postulates == "
+          putStrLn $ concatMap printPost' posts
+          putStrLn " == Elab type == "
+          putStrLn . showTerm $ typ'
+          putStrLn " == Elab term == "
+          putStrLn . showTerm $ trm
+        printPost' (n,typ') = n ++ " : " ++ showTerm typ' ++ "\n" ++ n ++ " : " ++ show typ' ++ "\n"
+
 
 processProb :: ChkProb -> Either Error (Log, Xi, ([(Name,CExpr)], CExpr,CExpr), Either Error ([(Name,Type)],Type,Term))
 processProb prob = go (unzip (constants prob)) (typ prob) (term prob)
   where go (ns,pstS) typS trmS = ccurr ns elabProblem <$> snd (scopecheckProb pstS typS trmS)
         ccurr ns f (a,b,c) = f (zip ns a) b c
+
+
+processOptProb :: OptChkProb -> Either Error (Log, Xi, ([(Name,CExpr)], CExpr,CExpr), Either Error ([(Name,Type)],Type,Term))
+processOptProb prob = go (first unzip $ unzip (posts prob)) (typeS prob) (termS prob)
+   where go ((ns,exps),alts) (typS,typI) trmS = elabProb ns alts typI <$> snd (scopecheckProb exps typS trmS)
+         elabProb ns alts typI (exprs,typC,trmC) = elabOptProblem (zip (zip ns exprs) alts) trmC (typC,typI)
