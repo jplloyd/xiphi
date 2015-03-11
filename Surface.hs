@@ -24,9 +24,9 @@ instance Show SExpr where
    SSet -> "Set"
    SVar n -> n
    SCns n -> "Const_" ++ n
-   SFun impl expl cod -> pTele True impl ++ " " ++ pBind False expl ++ "->" ++ show cod
+   SFun impl expl cod -> pTele True impl ++ " " ++ pBind False expl ++ arrowRight ++ show cod
    SApp e1 impl e2 -> unwords [show e1,pAssgn impl,show e2]
-   SLam impl var e -> "\\" ++ concatMap brace impl ++ " " ++ var ++ " -> " ++ show e
+   SLam impl var e -> "\\" ++ concatMap brace impl ++ " " ++ var ++ arrowRight ++ show e
    SWld -> "_"
 
 instance Show SAssign where

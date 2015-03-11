@@ -72,8 +72,8 @@ instance Show Term where
    ISet -> "Set"
    ICns n -> "<"++n++">"
    IVar n -> show n
-   IFun (n,t) t' -> par (show n ++ " : " ++ show t) ++ " -> " ++ show t'
-   ILam (n,t) t' -> "\\" ++ par (show n ++ " : " ++ show t) ++ " -> " ++ show t'
+   IFun (n,t) t' -> par (show n ++ " : " ++ show t) ++ arrowRight ++ show t'
+   ILam (n,t) t' -> "\\" ++ par (show n ++ " : " ++ show t) ++ arrowRight ++ show t'
    IApp t1 t2 -> show t1 ++ " " ++ show t2
    ISig bs -> "sig" ++ brace (intercalate "," (map show bs))
    IStruct assn -> "struct" ++ brace (intercalate "," (map show assn))
@@ -113,20 +113,20 @@ data Constraint =
 
 instance Show Constraint where
   show c = case c of
-    ExpC _T phis _Y -> show _T ++ angBr (show phis) ++ rightDblArr ++ show _Y
-    SubC _T fs     -> show _T ++ angBr (show fs)
-    PrjC _T t f _Y _X -> show _T ++ angBr (show t ++ "." ++ f)
+    ExpC _T phis _Y -> "XP " ++ show _T ++ angBr (show phis) ++ rightDblArr ++ show _Y
+    SubC _T fs     -> "SB " ++ show _T ++ angBr (show fs)
+    PrjC _T t f _Y _X -> "PR " ++ show _T ++ angBr (show t ++ "." ++ f)
                          ++ rightDblArr ++ " " ++ show _Y ++ " : " ++ show _X
-    EquC _U _T _X u -> par (show _U ++ " = " ++ show _T)
+    EquC _U _T _X u -> "EQ " ++ par (show _U ++ " = " ++ show _T)
                        ++ "\8224" ++  -- dagger
-                       par (show _X ++ "\8592 " ++ show u)
+                       par (show _X ++ arrowLeft ++ show u)
 
 instance Show a => Show (Env a) where
   show (Env ls) = brack . intercalate ", " . reverse $ map go ls
     where go (n,t) = show n ++ " : " ++ show t
 
 instance Show Xi where
-  show (Xi _ _ constrs metas') = surround "[[\n" "\n]]" (go constrs ++ "\n--===--\n\n" ++ go metas') ++ summary
+  show (Xi _ _ constrs metas') = surround "[[\n" "\n]]\n" ("\n== Constraints == \n\n" ++ go constrs ++ "\n== Metavariables ==\n\n" ++ go metas') ++ summary
     where go = unlines . map show . reverse
           summary = "Number of metas: " ++ show (length metas') ++ "\nNumber of constraints: " ++ show (length constrs)
 

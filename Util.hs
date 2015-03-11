@@ -53,3 +53,9 @@ rightAngBr = "\10217"
 
 rightDblArr :: String
 rightDblArr = "\8658 "
+
+arrowLeft :: String
+arrowLeft = "\8592 "
+
+arrowRight :: String
+arrowRight = " \8594 "
