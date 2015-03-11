@@ -119,7 +119,7 @@ instance Show Constraint where
                          ++ rightDblArr ++ " " ++ show _Y ++ " : " ++ show _X
     EquC _U _T _X u -> par (show _U ++ " = " ++ show _T)
                        ++ "\8224" ++  -- dagger
-                       par (show _X ++ "\8592" ++ show u)
+                       par (show _X ++ "\8592 " ++ show u)
 
 instance Show a => Show (Env a) where
   show (Env ls) = brack . intercalate ", " . reverse $ map go ls

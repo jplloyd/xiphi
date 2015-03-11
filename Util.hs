@@ -52,4 +52,4 @@ rightAngBr :: String
 rightAngBr = "\10217"
 
 rightDblArr :: String
-rightDblArr = "\8658"
+rightDblArr = "\8658 "
