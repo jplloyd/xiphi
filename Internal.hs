@@ -78,7 +78,7 @@ instance Show Term where
    ISig bs -> "sig" ++ brace (intercalate "," (map show bs))
    IStruct assn -> "struct" ++ brace (intercalate "," (map show assn))
    IProj t n -> show t ++ "." ++ n
-   IMeta (Meta n _ _) sb -> "_" ++ show n -- PRINT OUT SUBSTITUTIONS IN SOME NICE WAY
+   IMeta (Meta n _ _) sb -> "_" ++ show n ++ if null sb then "" else " " ++ show sb
 
 instance Show Meta where
   show (Meta n t g) = par ("_" ++ show n ++ " : " ++ show t) ++ "\n\t\915 = " ++ show g
@@ -142,7 +142,6 @@ isFinal _t = case _t of
    IStruct assn -> all isFinal (map assTerm assn)
    IProj t _ -> isFinal t
    IMeta _ _ -> False
-
 
 -- Add a bind to an environment
 addBind :: (Ref,Term) -> Gamma -> Gamma
