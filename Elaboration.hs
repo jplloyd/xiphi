@@ -275,6 +275,7 @@ freshMeta _T = sayRule FreshMeta >> do
   modify incMetaC
   _Γ <- gamma <$> ask 
   let meta = Meta metaIdx _T _Γ
+  modify (addMeta meta)
   return $ IMeta meta []
 
 -- Generate two fresh metavariables,

@@ -126,8 +126,9 @@ instance Show a => Show (Env a) where
     where go (n,t) = show n ++ " : " ++ show t
 
 instance Show Xi where
-  show (Xi _ _ constrs metas') = surround "[[\n" "\n]]" (go constrs ++ "\n--===--\n\n" ++ go metas')
+  show (Xi _ _ constrs metas') = surround "[[\n" "\n]]" (go constrs ++ "\n--===--\n\n" ++ go metas') ++ summary
     where go = unlines . map show . reverse
+          summary = "Number of metas: " ++ show (length metas') ++ "\nNumber of constraints: " ++ show (length constrs)
 
 -- Check if a term is final (no metavariables), as should be the case post-unification
 isFinal :: Term -> Bool

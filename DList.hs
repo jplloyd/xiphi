@@ -15,3 +15,5 @@ instance Monoid (DList a) where
   mempty = DL $ \xs -> [] ++ xs
   mappend d1 d2 = DL $ getDlist d1 . getDlist d2
 
+instance Show a => Show (DList a) where
+  show = show . fromDList
