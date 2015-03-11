@@ -171,7 +171,7 @@ infFun :: CBind -> CExpr -> TCM (Type,Term)
 infFun (CBind x _D) _E = do
   _U <-                  _D ⇇ ISet
   _V <- addBind (x,_U) $ _E ⇇ ISet
-  return (IFun (x,_U) _V,ISet)
+  return (ISet,IFun (x,_U) _V)
 
 -- Elaborate an expandable Lambda
 infLam :: Ref -> FList -> Ref -> CExpr -> TCM (Type,Term)
