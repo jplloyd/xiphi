@@ -36,7 +36,7 @@ freshRecBind :: SCM Ref
 freshRecBind = do
   vc <- rCounter <$> get
   say $ "Creating a fresh record bind:" ++ show vc
-  modify incV
+  modify incF
   return $ rec vc
 
 -- Substitutions (CExpr for variables) and related operations
@@ -48,7 +48,7 @@ type Theta = [Substitution]
 addBind :: Substitution -> SCM a -> SCM a
 addBind s = local (s:)
 
-addBinds  :: [Substitution] -> SCM a -> SCM a
+addBinds  :: Theta -> SCM a -> SCM a
 addBinds ss = local (ss ++)
 
 getSubstitute :: N -> SCM CExpr
@@ -94,8 +94,8 @@ scopecheck' _e = case _e of
     r <- freshRecBind
     let recSubsts = map (\(FBind n' _) -> (n', CProj (CVar r) n')) bs
     say "Adding substitutions for references to the implicits, then checking the explicit argument."
-    e' <- addBinds recSubsts $ scopecheck' e
     v <- freshVarBind
+    e' <- addBinds recSubsts $ scopecheck' e
     say "Adding the substitution for the explicit binding and checking the codomain."
     cod' <- addBinds ((n, CVar v):recSubsts) $ scopecheck' cod
     return $ CFun (CBind r sig) (CFun (CBind v e') cod')

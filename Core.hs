@@ -61,7 +61,7 @@ instance Show CExpr where
     CApp e1 e2 -> show e1 ++ " " ++ show e2
     CSig bs -> "sig" ++ brace (concatMap (strip . show) bs)
     CEStr asn -> "estr" ++ brace (intercalate "," (map (strip . show) asn))
-    CProj e f -> show e ++"."++ show f
+    CProj e f -> show e ++"."++ f
     CWld -> "_"
 
 instance Show CSigma where
