@@ -98,9 +98,9 @@ latexTerm _t = case _t of
    ISet -> mathit "Set"
    ICns n -> mathit n
    IVar n -> latexRef n
-   IFun (n,t) t' -> (par $ (latexRef n) ++ ":" ++ latexTerm t) ++ "->" ++ par (latexTerm t')
-   ILam (n,t) t' -> "\\lambda " ++ par (latexRef n ++ ":" ++ latexTerm t) ++ "->" ++ par (latexTerm t')
-   IApp t1 t2 -> (latexTerm t1) ++ "\\fsp" ++ par (latexTerm t2)
+   IFun (n,t) t' -> (par $ (latexRef n) ++ ":" ++ latexTerm t) ++ " -> " ++ latexTerm t'
+   ILam (n,t) t' -> "\\lambda " ++ par (latexRef n ++ ":" ++ latexTerm t) ++ " -> " ++ par (latexTerm t')
+   IApp t1 t2 -> (latexTerm t1) ++ "\\fsp" ++ par (latexTerm t2) -- this only needs to be parenthesized if it is an app I think
    ISig bs -> "\\sig{" ++ intercalate "," (map latexBs bs) ++ "}"
    IStruct assn -> "\\struct{" ++ intercalate "," (map latexAssn' assn) ++ "}"
    IProj t n -> latexTerm t ++ "." ++ mathit n
@@ -110,7 +110,7 @@ latexBs :: IBind -> String
 latexBs (IBind n t) = mathit n ++ ":" ++ latexTerm t
 
 latexAssn' :: Assign' -> String
-latexAssn' (Ass f t) = mathit f ++ ":=" ++ latexTerm t
+latexAssn' (Ass f t) = mathit f ++ " := " ++ latexTerm t
 
 latexAssn :: Assign -> String
 latexAssn a = case a of
@@ -119,13 +119,13 @@ latexAssn a = case a of
 
 latexConstraint :: Constraint -> String
 latexConstraint c = case c of 
-    ExpC _T phis _Y -> latexTerm _T ++ "<" ++ latexPhis phis ++ ">" ++ "=>" ++ latexTerm _Y
-    SubC _T fs     -> latexTerm _T ++ "<" ++ latexFields fs ++ ">"
-    PrjC _T t f _Y _X -> latexTerm _T ++ "<" ++ (latexTerm t ++ "." ++ mathit f) ++ ">"
-                         ++ "=>" ++ " " ++ latexTerm _Y ++ " : " ++ latexTerm _X
-    EquC _U _T _X u -> par (latexTerm _U ++ "\\eq" ++ latexTerm _T)
-                       ++ "\\blocks" ++  -- dagger
-                       par (latexTerm _X ++ "<-" ++ latexTerm u)
+    ExpC _T phis _Y -> latexTerm _T ++ "< " ++ latexPhis phis ++ " > " ++ " \red " ++ latexTerm _Y
+    SubC _T fs     -> latexTerm _T ++ " < " ++ latexFields fs ++ " > "
+    PrjC _T t f _Y _X -> latexTerm _T ++ " < " ++ (latexTerm t ++ "." ++ mathit f) ++ " > "
+                         ++ " \red " ++ latexTerm _Y ++ " : " ++ latexTerm _X
+    EquC _U _T _X u -> par (latexTerm _U ++ " \\eq " ++ latexTerm _T)
+                       ++ " \\locks " ++  -- dagger
+                       par (latexTerm _X ++ " <- " ++ latexTerm u)
 
 latexPhis :: [Phi] -> String
 latexPhis phis = intercalate "," $ map latexPhi phis
