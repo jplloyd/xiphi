@@ -39,6 +39,13 @@ maybeErr mb f e = case mb of
   Nothing -> throwError e
   Just a  -> return (f a)
 
+-- probably replicating something more general here
+-- zip which always retains the left list
+maybezipR :: [a] -> [b] -> [(a,Maybe b)]
+maybezipR [] _ = []
+maybezipR (x:xs) [] = (x,Nothing) : maybezipR xs []
+maybezipR (x:xs) (y:ys) = (x,Just y) : maybezipR xs ys
+
 -- Unicode stuff
 
 -- useless, but diacritics are cool
