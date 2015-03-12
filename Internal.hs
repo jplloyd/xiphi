@@ -166,7 +166,7 @@ instance Show Substitution where
 
 -- Constraints and contexts
 
-data ContextConstraint = CConstr Gamma Constraint
+data ContextConstraint = CConstr {context :: Gamma, constraint ::  Constraint}
 
 instance Show ContextConstraint where
   show (CConstr g c) =  show c -- ++ "\n\t\915 = " ++ showGamma g
