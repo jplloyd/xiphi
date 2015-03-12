@@ -377,45 +377,39 @@ data Rule =
 
 -- Substitution/Reduction -- The work of Eskil M Johànsen Esq.
 
-type Ss = [Substitution]
-
 -- ComputeSubst: Should always return a reduced term
-subst :: Ss -> Term -> Term
-subst ss = reduce . sp ss
+subst :: Substitution -> Term -> Term
+subst s = reduce . sp s
 
 -- SubstProp: May return an unreduced term.
 -- Doesn't this feel like a functor operation? Ah well...
-sp :: Ss -> Term -> Term
-sp ss trm = case trm of
-  (IVar x)       -> sigma' ss x
+sp :: Substitution -> Term -> Term
+sp s trm = case trm of
   (IFun (r,u) v) -> IFun (r,sp' u) (sp' v)
   (ILam (r,u) v) -> ILam (r,sp' u) (sp' v)
   (IApp t1 t2)   -> IApp (sp' t1) (sp' t2)
   (ISig ibs)     -> ISig    $ map intoBindings ibs
   (IStruct ass)  -> IStruct $ map intoAssignss ass
   (IProj t f)    -> IProj (sp' t) f
-  (IMeta x olds) -> IMeta x (composeSubsts olds ss)
+  (IVar x)       -> sigma' s x
+  (IMeta x olds) -> IMeta x (composeSubsts s olds)
   _ -> trm -- Set and constants
- where sp' = sp ss
+ where sp' = sp s
        intoBindings (IBind n t) = IBind n $ sp' t
        intoAssignss (Ass   n t) = Ass   n $ sp' t
 
 -- SigmaFun: Computes actual substitution on a variable
-sigma' :: Ss -> Ref -> Term
-sigma' ss x = case ss of
-  [] -> IVar x
-  (Sub t y : ss') -> if y == x then t else sigma' ss' x
+sigma' :: Substitution -> Ref -> Term
+sigma' (Sub t y) x = if y == x then t else IVar x
         
--- Beware, front of the subst list is to the left! (Other way around in report.)
-composeSubsts :: Ss -> Ss -> Ss
-composeSubsts olds news = foldr lars news olds
-  where lars (Sub t n) = (Sub (subst news t) n :)
+-- Just store the subst without hassle. Backwards compared to report!
+composeSubsts :: Substitution -> [Substitution] -> [Substitution]
+composeSubsts = (:)
 
--- Reduces a term using rules for projections and... Nothing more?
+-- Reduces a term using rules for projections and... Nothing more!
 reduce :: Term -> Term
-reduce t = case t of
-      (IProj (IStruct ass) f) -> reduce $ structLookup' ass f
-      _ -> t
+reduce (IProj (IStruct ass) f) = structLookup' ass f
+reduce t = t
 
 -- point of hard failure, tough
 structLookup' :: [Assign'] -> Field -> Term
