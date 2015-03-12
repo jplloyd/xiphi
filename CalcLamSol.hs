@@ -128,3 +128,100 @@ _41<- sig{}
 _42<- Set
 _43<- \(r₁₉ : sig{}) → \(v₁₉ : Set) → \(r₂₀ : sig{}) → \(v₂₀ : Set) → v₁₉
 -}
+
+
+------------ works ---------------
+
+--worksMixNMatch = <w>  _2  _5  _8 _15 _18 _21
+worksType = IApp (IApp (IApp (IApp (IApp (IApp (ICns "w") _w2) _w5) _w8) _w15) _w18) _w21
+
+_w2  = IStruct []
+_w5  = fatLamw
+_w8  = IStruct []
+_w15 = IApp (IApp (ICns "refl") _w11) _w14
+_w18 = IStruct []
+_w21 = ILam (V RecBind 21,_w19)
+       (ILam (V VarBind 21,_w20) $ 
+         IVar (V VarBind 21))
+--where
+_w11 = IStruct [Ass {assF = "B", assTerm = _wX}]
+_wX  = _Y
+_w14 = fatLamw
+_w19 = ISig [IBind {ibF = "A", ibTerm = ISet}]
+_w20 = IProj (IVar (V RecBind 21)) "A"
+
+{-
+MixNMatch:
+_w0 <- sig{}
+_w1 <- struct{}
+_w2 <- _w1
+_w3 <- _w12
+_w4 <- _w13
+_w5 <- _w4
+_w6 <- sig{}
+_w7 <- struct{}
+_w8 <- _w7
+_w9 <- sig{B : Set}
+_w10<- struct{B := _wX}
+_w11<- _w10
+_wX <- _w12
+_w12<- (r₄ : sig{}) → (v₄ : Set) → (r₅ : sig{}) → (v₅ : Set) → Set
+_w13<- \(r₇ : sig{}) → (\(v₇ : Set) → (\(r₈ : sig{}) → (\(v₈ : Set) → v₇
+_w14<- _w13
+_w15<- <refl> _w11 _w14
+_w16<- sig{}
+_w17<- struct{}
+_w18<- _w17
+_w19<- sig{A : Set}
+_w20<- r₂₁.A
+_w21<- \(r₂₁ : _w19) → (\(v₂₁ : _w20) → v₂₁)
+-}
+
+
+------------ fails ---------------
+
+-- Note that the variable references w 21 are different from the works example ...
+
+--failsMixNMatch = <f>  _2  _5  _8 _15 _18 _21
+failsType = IApp (IApp (IApp (IApp (IApp (IApp (ICns "f") _f2) _f5) _f8) _f11) _f14) _f21
+
+_f2  = IStruct []
+_f5  = fatLamf
+_f8  = IStruct []
+_f11 = ILam (V RecBind 21,_f9)
+       (ILam (V VarBind 21,_f10) $
+         IVar (V VarBind 21))
+_f14 = IStruct []
+_f21 = IApp (IApp (ICns "refl") _f17) _f20
+--where
+_f9  = ISig [IBind {ibF = "A", ibTerm = ISet}]
+_f10 = IProj (IVar (V RecBind 21)) "A"
+_f17 = IStruct [Ass {assF = "B", assTerm = _fX}]
+_fX  = _Z
+_f20 = fatLamf
+
+{-
+_f0 <- sig{}
+_f1 <- struct{}
+_f2 <- _f1
+_f3 <- _f18
+_f4 <- _f19
+_f5 <- _f4
+_f6 <- sig{}
+_f7 <- struct{}
+_f8 <- _f7
+_f9 <- sig{A : Set}
+_f10<- r₂₁.A
+_f11<- \(r₂₁ : _9) → \(v₂₁ : _10) → v₂₁
+_f12<- sig{}
+_f13<- struct{}
+_f14<- _f13
+_f15<- sig{B : Set}
+_f16<- struct{B := _fX}
+_f17<- _f16
+_fX <- _f18
+_f18<- (r₁₃ : sig{}) → (v₁₃ : Set) → (r₁₄ : sig{}) → (v₁₄ : Set) → Set
+_f19<- \(r₁₉ : sig{}) → \(v₁₉ : Set) → \(r₂₀ : sig{}) → \(v₂₀ : Set) → v₁₉
+_f20<- _f19
+_f21<- refl _f17 _f20
+-}
