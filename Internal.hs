@@ -72,7 +72,7 @@ showTerm _t = case _t of
    ISet -> "Set"
    ICns n -> "<"++n++">"
    IVar n -> showRef n
-   IFun (n,t) t' -> par (showRef n ++ " : " ++ showTerm t) ++ arrowRight ++ showTerm t'
+   IFun (n,t) t' -> par $ par (showRef n ++ " : " ++ showTerm t) ++ arrowRight ++ showTerm t'
    ILam (n,t) t' -> par $ "\\" ++ par (showRef n ++ " : " ++ showTerm t) ++ arrowRight ++ showTerm t'
    IApp t1 t2 -> par (showTerm t1) ++ " " ++ showTerm t2
    ISig bs -> "sig" ++ brace (intercalate "," (map showIB bs))
