@@ -238,12 +238,12 @@ infApp e1 e2 = do
 appAt :: (Term,Type) -> (Term,Type) -> TCM (Term,Type)
 appAt (t, IFun (x, _U') _V) (u, _U) = sayRule AppKnown >> do
   u' <- genEq u _U _U'
-  return (IApp t u', subst [Sub u' x] _V) -- a point of substitution
+  return (IApp t u', subst (Sub u' x) _V) -- a point of substitution
 appAt (t,_T) (u,_U) = sayRule AppUnknown >> do
   x  <- freshBind 
   _Y <- addBind (x,_U) $ freshMeta ISet
   t' <- genEq t _T (IFun (x,_U) _Y)
-  return (IApp t' u, subst [Sub u x] _Y) -- subst can ofc be bypassed here
+  return (IApp t' u, subst (Sub u x) _Y) -- subst can ofc be bypassed here
   
 -- Elaborate a record type
 -- This elaboration is very tedious when following the rules exactly
@@ -288,7 +288,8 @@ handleProj t f _T = case _T of
     say "Transforming projection type"
     (fs',_U) <- sigLookup fs f
     let proj = IProj t f
-    return (proj,subst (map (Sub proj . field) fs') _U) -- even more substitutions
+    let substs = map (Sub proj . field ) fs'
+    return (proj, foldl (flip subst) _U substs)
   _          -> do
     say "Generating projection constraint"
     (_Y,_X) <- freshMetas
