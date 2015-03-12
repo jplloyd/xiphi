@@ -80,6 +80,69 @@ showTerm _t = case _t of
    IProj t n -> showTerm t ++ "." ++ n
    IMeta (Meta n _ _) sb -> "_" ++ show n ++ if null sb then "" else " " ++ show sb
 
+
+-- Latex printing
+
+-- Place as underset to a variable
+underset :: String -> String -> String
+underset v uset = v ++ "_{" ++ uset ++"}"
+
+
+mathit :: String -> String
+mathit s = "\\mathit{" ++ s ++ "}"
+
+
+-- These things have to be in math context in order to compile
+latexTerm :: Term -> String
+latexTerm _t = case _t of
+   ISet -> mathit "Set"
+   ICns n -> mathit n
+   IVar n -> latexRef n
+   IFun (n,t) t' -> (par $ (latexRef n) ++ ":" ++ latexTerm t) ++ "->" ++ par (latexTerm t')
+   ILam (n,t) t' -> "\\lambda " ++ par (latexRef n ++ ":" ++ latexTerm t) ++ "->" ++ par (latexTerm t')
+   IApp t1 t2 -> (latexTerm t1) ++ "\\fsp" ++ par (latexTerm t2)
+   ISig bs -> "\\sig{" ++ intercalate "," (map latexBs bs) ++ "}"
+   IStruct assn -> "\\struct{" ++ intercalate "," (map latexAssn' assn) ++ "}"
+   IProj t n -> latexTerm t ++ "." ++ mathit n
+   IMeta (Meta n _ _) sb -> underset "X" (show n) -- possibly include substitutions
+
+latexBs :: IBind -> String
+latexBs (IBind n t) = mathit n ++ ":" ++ latexTerm t
+
+latexAssn' :: Assign' -> String
+latexAssn' (Ass f t) = mathit f ++ ":=" ++ latexTerm t
+
+latexAssn :: Assign -> String
+latexAssn a = case a of
+  Pos t -> latexTerm  t
+  Named f t -> mathit f ++ "=" ++ latexTerm t
+
+latexConstraint :: Constraint -> String
+latexConstraint c = case c of 
+    ExpC _T phis _Y -> latexTerm _T ++ "<" ++ latexPhis phis ++ ">" ++ "=>" ++ latexTerm _Y
+    SubC _T fs     -> latexTerm _T ++ "<" ++ latexFields fs ++ ">"
+    PrjC _T t f _Y _X -> latexTerm _T ++ "<" ++ (latexTerm t ++ "." ++ mathit f) ++ ">"
+                         ++ "=>" ++ " " ++ latexTerm _Y ++ " : " ++ latexTerm _X
+    EquC _U _T _X u -> par (latexTerm _U ++ "\\eq" ++ latexTerm _T)
+                       ++ "\\blocks" ++  -- dagger
+                       par (latexTerm _X ++ "<-" ++ latexTerm u)
+
+latexPhis :: [Phi] -> String
+latexPhis phis = intercalate "," $ map latexPhi phis
+  where latexPhi (Phi asgn _T) = latexAssn asgn ++ ":" ++ latexTerm _T
+
+latexFields :: [String] -> String
+latexFields fields = intercalate "," fields
+
+latexRef :: Ref -> String
+latexRef (V g idx) = flip underset (show idx) $ case g of
+  VarBind -> "x"
+  RecBind -> "r"
+  Unknown -> "u" -- should not be part of output post-resolution
+
+-- end of latex printing
+
+
 instance Show Meta where
   show (Meta n _ _) = "_" ++ show n
 
