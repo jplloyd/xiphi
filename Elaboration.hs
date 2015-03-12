@@ -378,39 +378,27 @@ data Rule =
 
 -- Substitution/Reduction -- The work of Eskil M Johànsen Esq.
 
--- ComputeSubst: Should always return a reduced term
-subst :: Substitution -> Term -> Term
-subst s = reduce . sp s
-
--- SubstProp: May return an unreduced term.
--- Doesn't this feel like a functor operation? Ah well...
-sp :: Substitution -> Term -> Term
-sp s trm = case trm of
-  (IFun (r,u) v) -> IFun (r,sp' u) (sp' v)
-  (ILam (r,u) v) -> ILam (r,sp' u) (sp' v)
-  (IApp t1 t2)   -> IApp (sp' t1) (sp' t2)
+-- sigmaFun should always return a fully projReduced term
+sigmaFun :: Substitution -> Term -> Term
+sigmaFun s trm = case trm of
+  (IFun (r,u) v) -> IFun (r,go u) (go v)
+  (ILam (r,u) v) -> ILam (r,go u) (go v)
+  (IApp t1 t2)   -> IApp (go t1) (go t2)
   (ISig ibs)     -> ISig    $ map intoBindings ibs
   (IStruct ass)  -> IStruct $ map intoAssignss ass
-  (IProj t f)    -> IProj (sp' t) f
-  (IVar x)       -> sigma' s x
-  (IMeta x olds) -> IMeta x (composeSubsts s olds)
+  (IProj t f)    -> projReduce $ IProj (go t) f
+  (IMeta x olds) -> IMeta x (s : olds)
+  (IVar x)       -> subst x s
   _ -> trm -- Set and constants
- where sp' = sp s
-       intoBindings (IBind n t) = IBind n $ sp' t
-       intoAssignss (Ass   n t) = Ass   n $ sp' t
+ where go = sigmaFun s
+       intoBindings (IBind n t) = IBind n $ go t
+       intoAssignss (Ass   n t) = Ass   n $ go t
+       subst x (Sub t y) = if x == y then t else IVar x
 
--- SigmaFun: Computes actual substitution on a variable
-sigma' :: Substitution -> Ref -> Term
-sigma' (Sub t y) x = if y == x then t else IVar x
-        
--- Just store the subst without hassle. Backwards compared to report!
-composeSubsts :: Substitution -> [Substitution] -> [Substitution]
-composeSubsts = (:)
-
--- Reduces a term using rules for projections and... Nothing more!
-reduce :: Term -> Term
-reduce (IProj (IStruct ass) f) = structLookup' ass f
-reduce t = t
+-- Reduces a projection if possible
+projReduce :: Term -> Term
+projReduce (IProj (IStruct ass) f) = structLookup' ass f
+projReduce t = t
 
 -- point of hard failure, tough
 structLookup' :: [Assign'] -> Field -> Term
