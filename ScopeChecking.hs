@@ -41,7 +41,7 @@ freshRecBind = do
 
 -- Substitutions (CExpr for variables) and related operations
 
-type Substitution = (N,CExpr)
+type Substitution = (Name,CExpr)
 
 type Theta = [Substitution]
 
@@ -51,7 +51,7 @@ addBind s = local (s:)
 addBinds  :: Theta -> SCM a -> SCM a
 addBinds ss = local (ss ++)
 
-getSubstitute :: N -> SCM CExpr
+getSubstitute :: Name -> SCM CExpr
 getSubstitute n = do
   say $ "Looking up the replacement for " ++ n
   subs <- ask
@@ -142,7 +142,7 @@ makeSig bs = do
             return $ FBind n ce : rm
 
 -- Helper extracting names from lists of bindings
-bindsOf :: [SBind] -> [N] 
+bindsOf :: [SBind] -> [Name] 
 bindsOf = map (\(SBind n _) -> n)
 
 -- Auxiliary function to create expandable records

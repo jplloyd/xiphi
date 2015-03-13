@@ -16,12 +16,12 @@ import Prelude hiding (log)
 -- Wrapping a type checking problem
 -- the expressions of the tuple list are turned into
 -- constants (in order) and have to be fully type checked
-data ChkProb = ChkProb {constants :: [(N,SExpr)], term ::  SExpr, typ :: SExpr}
+data ChkProb = ChkProb {constants :: [(Name,SExpr)], term ::  SExpr, typ :: SExpr}
 
 -- So this is what we want to have: a set of postulates, an expression and a type in Surface,
 -- and a set of optional postulate-replacements in Internal, providing the ability to instantiate things manually
 -- the type in Surface should also be replaceable eventually
-data OptChkProb = OCP {posts :: [((N,SExpr), Maybe Type)],
+data OptChkProb = OCP {posts :: [((Name,SExpr), Maybe Type)],
                        termS :: SExpr, 
                        typeS :: (SExpr,Maybe Type)}
 
@@ -45,16 +45,22 @@ process prob = do
           putStrLn . showTerm $ typ'
           putStrLn " == Elab term == "
           putStrLn . showTerm $ trm
-        printPost (n,typ') = n ++ " : " ++ show typ' ++ "\n"
-        printPost' (n,typ') = n ++ " : " ++ showTerm typ' ++ "\n" ++ n ++ " : " ++ show typ' ++ "\n"
-        printSurface psts typ' trm = do
+
+printPost (n,typ') = n ++ " : " ++ show typ' ++ "\n"
+
+printPost' (n,typ') = n ++ " : " ++ showTerm typ' ++ "\n" ++ n ++ " : " ++ show typ' ++ "\n"
+
+printLPost (n,typ') = n ++ " : " ++ latexTerm typ' ++ "\n"
+
+printSurface psts typ' trm = do
           putStrLn "-- surface postulates"
           putStrLn $ concatMap printPost psts
           putStrLn "-- surface type"
           print typ'
           putStrLn "-- surface term"
           print trm
-        printCore (psts,typ',trm) = do
+
+printCore (psts,typ',trm) = do
           putStrLn "-- core postulates"
           putStrLn $ concatMap printPost psts
           putStrLn "-- core type"
@@ -70,18 +76,23 @@ processOpt prob = do
     either (\err -> putStrLn "A scope checking error occured" >> putStrLn err) handle result
   where handle (log,xi,expr,result) = do
           putStrLn (fromDList log)
+          printSurface (map fst (posts prob)) (typeS prob) (termS prob)
+          printCore expr
           either (\err -> putStrLn "An elaboration error occured" >> putStrLn err) (handle' expr) result
           putStrLn " == Meta Context =="
           print xi
+          putStrLn " == Latex constraints =="
+          putStrLn $ unlines . map (latexConstraint . constraint) $ constraints xi
         handle' :: ([(Name,CExpr)], CExpr,CExpr) -> ([(Name,Type)],Type,Term) -> IO ()
         handle' expr (posts,typ',trm) = do
           putStrLn " == Postulates == "
           putStrLn $ concatMap printPost' posts
+          putStrLn " == Latex Posts == "
+          putStrLn $ concatMap printLPost posts
           putStrLn " == Elab type == "
           putStrLn . showTerm $ typ'
           putStrLn " == Elab term == "
           putStrLn . showTerm $ trm
-        printPost' (n,typ') = n ++ " : " ++ showTerm typ' ++ "\n" ++ n ++ " : " ++ show typ' ++ "\n"
 
 
 processProb :: ChkProb -> Either Error (Log, Xi, ([(Name,CExpr)], CExpr,CExpr), Either Error ([(Name,Type)],Type,Term))

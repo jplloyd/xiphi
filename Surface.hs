@@ -1,23 +1,54 @@
+-- | Surface grammar which enforces the existence of implicit constructs
+-- for every function type, lambda abstraction and application
 module Surface where
 
 import Util 
+import Types
 
-type N = String
-
-data SBind = SBind N SExpr
-data SAssign = SPos SExpr | SNamed N SExpr
+data SBind = SBind Name SExpr
+data SAssign = SPos SExpr | SNamed Name SExpr
 
 -- Expressions in the surface language
 data SExpr = 
    SSet 
- | SCns N 
- | SVar N 
+ | SCns Name
+ | SVar Name
  | SFun [SBind] SBind SExpr 
  | SApp SExpr [SAssign] SExpr
- | SLam [N] N SExpr
+ | SLam [Name] Name SExpr
  | SWld
 
-data SSigma = SS [(N,SExpr)]
+
+-- Expression-construction helpers
+
+set :: SExpr
+set = SSet
+
+constant :: Name -> SExpr
+constant = SCns
+
+function :: [SBind] -> SBind -> SExpr -> SExpr
+function = SFun
+
+function' :: SBind -> SExpr -> SExpr
+function' = function []
+
+apply :: SExpr -> [SAssign] -> SExpr -> SExpr
+apply = SApp
+
+apply' :: SExpr -> SExpr -> SExpr
+apply' = flip apply []
+
+lambda :: [Name] -> Name -> SExpr -> SExpr
+lambda = SLam
+
+lambda' :: Name -> SExpr -> SExpr
+lambda' = SLam []
+
+wildcard :: SExpr
+wildcard = SWld
+
+--
 
 instance Show SExpr where
   show e' = case e' of 

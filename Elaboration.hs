@@ -1,5 +1,10 @@
 {-# LANGUAGE TupleSections #-}
 {-# OPTIONS -W -Wall #-}
+-- | Elaboration is the transformation of an expression in the Core grammar 
+-- to a term in the Internal grammar, under the generation of constraints
+-- on subterms of the output. The peculiar variable names are used to 
+-- mimic the formal rules declared in the report to which this implementation
+-- is related.
 module Elaboration where
 
 import DList
@@ -10,6 +15,7 @@ import Types
 import Util
 
 import Data.Maybe
+import Data.Tuple
 import Control.Arrow
 import Control.Applicative
 
@@ -25,28 +31,19 @@ import Control.Monad.Trans.Writer
 -- The thing-in-itself -- takes a constant context and starts from a check on the given expression.
 -- Could alt. take two exprsesion and just elab one first - alternatives can be written when needed.
 elaborate :: Sigma -> CExpr -> Type -> (Log, Either Error Term)
-elaborate _Σ e _T = (eLog,term)
-  where errM = check e _T
-        logM = runExceptT errM
-        ctxM = runWriterT logM
-        mtsM = runReaderT ctxM (_Σ,Env [])
-        (term,eLog) = evalState mtsM emptyXi
+elaborate sig e _T = swap $ evalState (elab_ sig e _T) emptyXi
+
+elab_ :: Sigma -> CExpr -> Type -> State Xi (Either Error Term, Log)
+elab_ sig e _T = runReaderT (runWriterT (runExceptT (check e _T))) (sig,Env [])
 
 elaborate' :: Sigma -> CExpr -> Type -> (Log, Xi, Either Error Term)
-elaborate' _Σ e _T = (eLog,xi,term)
-  where errM = check e _T
-        logM = runExceptT errM
-        ctxM = runWriterT logM
-        mtsM = runReaderT ctxM (_Σ,Env [])
-        ((term,eLog),xi) = runState mtsM emptyXi
+elaborate' sig e _T = (eLog,xi,term)
+  where ((term,eLog),xi) = runState (elab_ sig e _T) emptyXi
 
 elabProblem :: [(Name,CExpr)] -> CExpr -> CExpr -> (Log, Xi, ([(Name,CExpr)], CExpr,CExpr), Either Error ([(Name,Type)],Type,Term))
 elabProblem posts typ trm = (eLog,xi,(posts,typ,trm),term)
-  where errM = checkProblem posts typ trm
-        logM = runExceptT errM
-        ctxM = runWriterT logM
-        mtsM = runReaderT ctxM (Env [],Env [])
-        ((term,eLog),xi) = runState mtsM emptyXi
+  where ctxM = flip runReaderT (Env [],Env []) . runWriterT . runExceptT $ checkProblem posts typ trm
+        ((term,eLog),xi) = runState ctxM emptyXi
 
 elabOptProblem :: [((Name,CExpr),Maybe Type)] -> CExpr -> (CExpr, Maybe Type) -> (Log, Xi, ([(Name,CExpr)], CExpr,CExpr), Either Error ([(Name,Type)],Type,Term))
 elabOptProblem posts termC typeC = (eLog,xi,(map fst posts,fst typeC,termC),term)
@@ -55,7 +52,6 @@ elabOptProblem posts termC typeC = (eLog,xi,(map fst posts,fst typeC,termC),term
         ctxM = runWriterT logM
         mtsM = runReaderT ctxM (Env [],Env [])
         ((term,eLog),xi) = runState mtsM emptyXi
-
 
 checkPostulates :: [(Name,CExpr)] -> TCM Sigma
 checkPostulates = go
@@ -205,7 +201,7 @@ infSet = return (ISet,ISet)
 -- Elaborate function types
 infFun :: CBind -> CExpr -> TCM (Type,Term)
 infFun (CBind x _D) _E = do
-  _U <-                  _D ⇇ ISet
+  _U <- _D ⇇ ISet
   _V <- addBind (x,_U) $ _E ⇇ ISet
   return (ISet,IFun (x,_U) _V)
 
@@ -238,12 +234,12 @@ infApp e1 e2 = do
 appAt :: (Term,Type) -> (Term,Type) -> TCM (Term,Type)
 appAt (t, IFun (x, _U') _V) (u, _U) = sayRule AppKnown >> do
   u' <- genEq u _U _U'
-  return (IApp t u', subst (Sub u' x) _V) -- a point of substitution
+  return (IApp t u', sigmaFun (Sub u' x) _V) -- a point of substitution
 appAt (t,_T) (u,_U) = sayRule AppUnknown >> do
   x  <- freshBind 
   _Y <- addBind (x,_U) $ freshMeta ISet
   t' <- genEq t _T (IFun (x,_U) _Y)
-  return (IApp t' u, subst (Sub u x) _Y) -- subst can ofc be bypassed here
+  return (IApp t' u, sigmaFun (Sub u x) _Y) -- subst can ofc be bypassed here
   
 -- Elaborate a record type
 -- This elaboration is very tedious when following the rules exactly
@@ -289,7 +285,7 @@ handleProj t f _T = case _T of
     (fs',_U) <- sigLookup fs f
     let proj = IProj t f
     let substs = map (Sub proj . field ) fs'
-    return (proj, foldl (flip subst) _U substs)
+    return (proj, foldl (flip sigmaFun) _U substs)
   _          -> do
     say "Generating projection constraint"
     (_Y,_X) <- freshMetas

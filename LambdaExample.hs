@@ -30,7 +30,12 @@ failsDef = (eapp3 cf SWld eid refl_Wld)
 
 postTypes = [Just _EqType, Just reflType, Just wType, Just fType]
 
-opt = OCP (zip postulates postTypes) worksDef (SSet,Nothing)
+opt def = OCP (zip postulates postTypes) def (SSet,Nothing)
+
+worksOpt = opt worksDef
+
+failsOpt = opt failsDef
+
 
 -- Identifiers
 _Eq = "Eq"

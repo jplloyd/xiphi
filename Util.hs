@@ -43,14 +43,10 @@ maybeErr mb f e = case mb of
 -- zip which always retains the left list
 maybezipR :: [a] -> [b] -> [(a,Maybe b)]
 maybezipR [] _ = []
-maybezipR (x:xs) [] = (x,Nothing) : maybezipR xs []
+maybezipR xs [] = zip xs $ repeat Nothing
 maybezipR (x:xs) (y:ys) = (x,Just y) : maybezipR xs ys
 
--- Unicode stuff
-
--- useless, but diacritics are cool
-vectorify :: String -> String
-vectorify s = intersperse '\773' s ++ "\773" -- "\8407"
+-- Unicode strings
 
 leftAngBr :: String
 leftAngBr = "\10216"
