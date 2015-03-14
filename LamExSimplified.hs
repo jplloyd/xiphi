@@ -13,14 +13,14 @@ emono = fun dSet SSet
 
 -- Postulates
 postulates =
-  [(_Eq, funASet dA (fun dA SSet))
+  [(_Eq, funASet dA SSet)
   ,(_eq, funBSet baB (appEq va))
   ,(_w, funbBool dappEq_vb (fun difb SSet))
   ,(_f, funbBool difb (fun dappEq_vb SSet))
   ]
 
 -- Type checking problems
-simple = ChkProb (take 5 postulates) SSet SSet
+simple n = ChkProb (take n postulates) SSet SSet
 works = ChkProb postulates worksDef SSet
 fails = ChkProb postulates failsDef SSet
 
