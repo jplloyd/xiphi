@@ -14,7 +14,6 @@ import qualified Internal as I
 import Types
 import Util
 
-import Data.Maybe
 import Data.Tuple
 import Control.Arrow
 import Control.Applicative
@@ -28,77 +27,18 @@ import Control.Monad.Trans.Writer
 -- Note that all terms are fully normalized at all stages expect during
 -- the normalization stage that is substitution (internally)
 
--- The thing-in-itself -- takes a constant context and starts from a check on the given expression.
--- Could alt. take two exprsesion and just elab one first - alternatives can be written when needed.
+-- Elaborate - return log and term
 elaborate :: Sigma -> CExpr -> Type -> (Log, Either Error Term)
 elaborate sig e _T = swap $ evalState (elab_ sig e _T) emptyXi
 
-elab_ :: Sigma -> CExpr -> Type -> State Xi (Either Error Term, Log)
-elab_ sig e _T = runReaderT (runWriterT (runExceptT (check e _T))) (sig,Env [])
-
+-- Elaborate - return log, final context and term
 elaborate' :: Sigma -> CExpr -> Type -> (Log, Xi, Either Error Term)
 elaborate' sig e _T = (eLog,xi,term)
   where ((term,eLog),xi) = runState (elab_ sig e _T) emptyXi
 
-elabProblem :: [(Name,CExpr)] -> CExpr -> CExpr -> (Log, Xi, ([(Name,CExpr)], CExpr,CExpr), Either Error ([(Name,Type)],Type,Term))
-elabProblem posts typ trm = (eLog,xi,(posts,typ,trm),term)
-  where ctxM = flip runReaderT (Env [],Env []) . runWriterT . runExceptT $ checkProblem posts typ trm
-        ((term,eLog),xi) = runState ctxM emptyXi
-
-elabOptProblem :: [((Name,CExpr),Maybe Type)] -> CExpr -> (CExpr, Maybe Type) -> (Log, Xi, ([(Name,CExpr)], CExpr,CExpr), Either Error ([(Name,Type)],Type,Term))
-elabOptProblem posts termC typeC = (eLog,xi,(map fst posts,fst typeC,termC),term)
-  where errM = checkOptProblem posts termC typeC
-        logM = runExceptT errM
-        ctxM = runWriterT logM
-        mtsM = runReaderT ctxM (Env [],Env [])
-        ((term,eLog),xi) = runState mtsM emptyXi
-
-checkPostulates :: [(Name,CExpr)] -> TCM Sigma
-checkPostulates = go
-  where go [] = return (Env [])
-        go ((n,e):rs) = do
-          say "##############################"
-          say $ "Checking the postulate " ++ n
-          say "##############################"
-          t <- check e ISet
-          say $ "Adding " ++ n ++ " to Sigma"
-          (Env ls) <- local (first (liftE ((n,t):))) $ go rs
-          return (Env $ (n,t):ls)
-
-checkOptPostulates :: [((Name,CExpr),Maybe Type)] -> TCM Sigma
-checkOptPostulates = go
-  where go [] = return (Env [])
-        go (((n,e),mbt):rs) = do
-          say "##############################"
-          say $ "Processing the postulate " ++ n
-          say "##############################"
-          t <- maybe (check e ISet) return mbt
-          when (isJust mbt) $ finCheck (fromJust mbt) >> say ("Type for the postulate: " ++ n ++ " was provided directly")
-          say $ "Adding " ++ n ++ " to Sigma"
-          (Env ls) <- local (first (liftE ((n,t):))) $ go rs
-          return (Env $ (n,fromMaybe t mbt):ls)
-        finCheck t = unless (isFinal t) $ throwError "Cannot provide non-finalized types manually"
-
-
-checkProblem :: [(Name,CExpr)] -> CExpr -> CExpr -> TCM ([(Name,Type)],Type,Term)
-checkProblem posts typ trm = do
-  sigm@(Env ls) <- checkPostulates posts
-  say $ "## PROBLEM STEP ## : Checking that " ++ show typ  ++ " is a type"
-  type' <- local (first (const sigm)) $ check typ ISet
-  say "## PROBLEM STEP ## : Checking the expression against the type"
-  term <- local (first (const sigm)) $ check trm type'
-  return (ls,type',term)
-
-checkOptProblem :: [((Name,CExpr),Maybe Type)] -> CExpr -> (CExpr, Maybe Type) -> TCM ([(Name,Type)],Type,Term)
-checkOptProblem posts trm (typ,mbt) = do
-  sigm@(Env ls) <- checkOptPostulates posts
-  when (isNothing mbt) $ say $ "## PROBLEM STEP ## : Checking that " ++ show typ  ++ " is a type"
-  when (isJust mbt) $ say ("The type has been provided directly: " ++ showTerm (fromJust mbt))
-  type' <- local (first (const sigm)) $ maybe (check typ ISet) return mbt
-  say "## PROBLEM STEP ## : Checking the expression against the type"
-  let _T = fromMaybe type' mbt
-  term <- local (first (const sigm)) $ check trm _T
-  return (ls,_T,term)
+-- helper
+elab_ :: Sigma -> CExpr -> Type -> State Xi (Either Error Term, Log)
+elab_ sig e _T = runReaderT (runWriterT (runExceptT (check e _T))) (sig,Env [])
 
 
 -- Environment synonyms - typed constants and variables
@@ -110,15 +50,12 @@ sigma = fst
 gamma :: TCEnv -> Gamma
 gamma = snd
 
--- Type checking monad -
--- error handling,
--- progress logging,
--- reader for constants and local variables,
--- state for meta/constraint store
+-- Type checking monad - error handling, progress logging,
+-- reader for constants and local variables, state for meta/constraint store
 type TCM = ErrT (LogT (ReaderT TCEnv (State Xi)))
 
 
--- ##    Logging    ##
+-- ##    Logging    ## -------------------------------------
 
 -- Simple logging - arbitrary strings
 say :: String -> TCM ()
@@ -129,7 +66,7 @@ sayRule :: Rule -> TCM ()
 sayRule r = lift $ tell (toDList (show r ++ "\n"))
 
 
--- ##  Context functions  ##
+-- ##  Context functions  ## -------------------------------
 
 -- Add a binding to Gamma
 addBind :: (Ref,Type) -> TCM a -> TCM a
@@ -150,7 +87,7 @@ lookupGamma n = lookupE n . gamma <$> ask >>= \mt -> maybeErr mt id errMsg
     where errMsg = "Variable reference" ++ show n ++ " not in scope!"
 
 
--- ##  Checking and equality  ##
+-- ##  Checking and equality  ## ---------------------------
 
 -- Check a core expression against a type
 check :: CExpr -> Type -> TCM Term
@@ -170,7 +107,8 @@ genEq u _U _T | _T == _U = sayRule EqRedRefl >> return u
                   addC (EquC _U _T _Y u)
                   return _Y
 
--- ##  Inference rules  ##
+
+-- ##  Inference rules  ## ---------------------------------
 
  -- ElabM will now have a reader for constants and possibly for Gamma as well
 infer :: CExpr -> TCM (Type,Term)
@@ -346,7 +284,7 @@ infWld = do -- swap <$> freshMetas
   return (_X,_Y)
 
 
--- ##  Xi-related operations  ##
+-- ##  Xi-related operations  ## ---------------------------
 
 -- Generate a fresh metavariable of a given type
 freshMeta :: Type -> TCM Term
@@ -381,7 +319,7 @@ addC _C = sayRule AddConstraint >> do
   modify (addConstraint (CConstr _Γ _C)) -- add the constraint to the store
 
 
--- ##  Rule references ##
+-- ##  Rule references ## ----------------------------------
 
 -- Rules used in type checking - show instance will reference rules (eventually)
 data Rule =
@@ -419,7 +357,7 @@ data Rule =
   deriving Show
 
 
--- Substitution/Reduction -- The work of Eskil M Johànsen Esq.
+-- ##  Substitution/Reduction ##  --------------------------
 
 -- sigmaFun should always return a fully projReduced term
 sigmaFun :: Substitution -> Term -> Term

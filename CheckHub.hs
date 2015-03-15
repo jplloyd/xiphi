@@ -4,7 +4,7 @@ module CheckHub where
 import Surface
 import Core
 import ScopeChecking
-import Elaboration
+import ElabSpec
 import Internal
 import Types
 import DList
