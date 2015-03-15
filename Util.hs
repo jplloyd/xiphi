@@ -46,6 +46,13 @@ maybezipR [] _ = []
 maybezipR xs [] = zip xs $ repeat Nothing
 maybezipR (x:xs) (y:ys) = (x,Just y) : maybezipR xs ys
 
+-- Check if the first list is a subsequence of the second
+subsequence :: Eq a => [a] -> [a] -> Bool
+subsequence _as _bs = go _as _bs
+  where go [] _  = True
+        go _  [] = False
+        go (a:as) (b:bs) = if a == b then go as bs else go _as bs
+
 -- Unicode strings
 
 leftAngBr :: String

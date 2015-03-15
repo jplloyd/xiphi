@@ -124,6 +124,11 @@ infer _e = case _e of
   CProj e f    -> sayRule InferProj >> infProj e f
   CWld         -> sayRule InferWld >> infWld
 
+
+-- Elaborate the type of types
+infSet :: TCM (Type,Term)
+infSet = return (ISet,ISet)
+
 -- Elaborate a constant
 infCons :: String -> TCM (Type,Term)
 infCons k = (,ICns k) <$> lookupSigma k
@@ -131,10 +136,6 @@ infCons k = (,ICns k) <$> lookupSigma k
 -- Elaborate a variable reference
 infVar :: Ref -> TCM (Type,Term)
 infVar x = (,IVar x) <$> lookupGamma x
-
--- Elaborate the type of types
-infSet :: TCM (Type,Term)
-infSet = return (ISet,ISet)
 
 -- Elaborate function types
 infFun :: CBind -> CExpr -> TCM (Type,Term)
@@ -166,11 +167,41 @@ infApp e1 e2 = do
   (v,_V) <- appAt' (t,_T) e2
   return (_V,v)
 
+-- Bypass expansion and subsequence constraints when possible
+appAt' :: (Term,Type) -> CExpr -> TCM (Term,Type)
+appAt' m@(t,_T) e = case (e,_T) of
+  (CEStr phiS, IFun (r,ISig fT) _V) -> do -- try to expand immediately
+    assn <- phiExp phiS fT
+    let u = IStruct assn
+    return (IApp t u, sigmaFun (Sub u r) _V)
+  (CLam r1 fs x e', IFun (r2, IFun (g,ISig fT) _VInn) _VOut) -> do -- try to assign immediately
+    sg <- subSD fs fT
+    et <- addBind (g,sg) $ e' ⇇ _VInn
+    let u = (ILam (r1,sg) (ILam (x,_VInn) et))
+    return (IApp t u,sigmaFun (Sub u r2) _VOut)
+  (_,_) -> do -- regular (t : T)@(u : U)
+    (_U,u) <- infer e
+    appAt m (u,_U)
+
+-- (t : T)@(u : U) ~> v
+-- If the thing is a known function type - run equality check (deferred or not)
+appAt :: (Term,Type) -> (Term,Type) -> TCM (Term,Type)
+appAt (t, IFun (x, _U') _V) (u, _U) = sayRule AppKnown >> do
+  u' <- genEq u _U _U'
+  return (IApp t u', sigmaFun (Sub u' x) _V)
+appAt (t,_T) (u,_U) = sayRule AppUnknown >> do
+  x  <- freshBind 
+  _Y <- addBind (x,_U) $ freshMeta ISet
+  t' <- genEq t _T (IFun (x,_U) _Y)
+  return (IApp t' u, sigmaFun (Sub u x) _Y)
+
+-- Expand structs, inserting metavariables for missing arguments
+-- fails if there are too many arguments (relative to expl. assignments)
 phiExp :: [CAssign] -> [IBind] -> TCM [Assign']
-phiExp = go
+phiExp [] [] = return []
+phiExp _ [] = throwError "Expansion failed miserably!"
+phiExp as bs = go as bs
   where go [] (IBind f _T : bs) = nomatch f _T [] bs
-        go [] [] = return []
-        go _ [] = throwError "Expansion failed miserably!"
         go assn@(as:ass) (IBind f _T : bs) = case as of
             CPos e -> match e
             CNamed f' e ->
@@ -187,44 +218,14 @@ phiExp = go
                 assn' <- go assn bs
                 return (Ass f t : assn')
 
+-- Check if the bindings are a subsequence of declarations from a sig,
+-- returning the sig if it is the case
 subSD :: FList -> [IBind] -> TCM Type
 subSD fl fT = do
+  say "Running subsequence check"
   unless (subsequence (getList fl) (map ibF fT)) $ throwError
     (show fl ++ " is not a subsequence of " ++ show fT)
   return (ISig fT)
-
-subsequence :: Eq a => [a] -> [a] -> Bool
-subsequence _as _bs = go _as _bs
-  where go [] _  = True
-        go _  [] = False
-        go (a:as) (b:bs) = if a == b then go as bs else go _as bs
-
-appAt' :: (Term,Type) -> CExpr -> TCM (Term,Type)
-appAt' m@(t,_T) e = case (e,_T) of
-  (CEStr phiS, IFun (r,ISig fT) _V) -> do -- try to expand immediately
-    assn <- phiExp phiS  fT
-    let u = IStruct assn
-    return (IApp t u, sigmaFun (Sub u r) _V)
-  (CLam r1 fs x e', IFun (r2, IFun (g,ISig fT) _VInn) _VOut) -> do -- try to assign immediately
-    sg <- subSD fs fT
-    et <- addBind (g,sg) $ e' ⇇ _VInn
-    let u = (ILam (r1,sg) (ILam (x,_VInn) et))
-    return (IApp t u,sigmaFun (Sub u r2) _VOut)
-  (_,_) -> do -- regular (t : T)@(u : U)
-    (_U,u) <- infer e
-    appAt m (u,_U)
-
--- (t : T)@(u : U) ~> v
--- If the thing is a known function type - run the equality thingy right away
-appAt :: (Term,Type) -> (Term,Type) -> TCM (Term,Type)
-appAt (t, IFun (x, _U') _V) (u, _U) = sayRule AppKnown >> do
-  u' <- genEq u _U _U'
-  return (IApp t u', sigmaFun (Sub u' x) _V)
-appAt (t,_T) (u,_U) = sayRule AppUnknown >> do
-  x  <- freshBind 
-  _Y <- addBind (x,_U) $ freshMeta ISet
-  t' <- genEq t _T (IFun (x,_U) _Y)
-  return (IApp t' u, sigmaFun (Sub u x) _Y)
   
 -- Elaborate a record type
 -- This elaboration is very tedious when following the rules exactly
