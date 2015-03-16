@@ -102,8 +102,8 @@ check e _T = sayRule CheckGen >> do
 -- even better would be to just check if they are wrong straight away (very much possible)
 genEq :: Term -> Type -> Type -> TCM Term
 genEq u _U _T | _T =$= _U = sayRule EqRedRefl >> return u
-              | _T =@= _U = say "Left meta assignment" >> addAss _T _U >> return u
-              | _U =@= _T = say "Right meta assignment" >> addAss _U _T >> return u
+--              | _T =@= _U = say "Left meta assignment" >> addAss _T _U >> return u
+--              | _U =@= _T = say "Right meta assignment" >> addAss _U _T >> return u
               | otherwise = sayRule EqRedGenC >> do
                   say $ "The types: " ++ showTerm _T ++ " and " ++ showTerm _U ++
                     " are not equal, generating equality constraint."
