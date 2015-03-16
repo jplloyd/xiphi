@@ -79,12 +79,12 @@ addBinds bs = local (second (I.addBinds bs))
 -- Look up the type of a constant
 lookupSigma :: String -> TCM Type
 lookupSigma n = lookupE n . sigma <$> ask >>= \mt -> maybeErr mt id errMsg
-    where errMsg = "Constant reference" ++ show n ++ " not in scope!"
+    where errMsg = "Constant reference: " ++ show n ++ " is not in scope!"
 
 -- Look up the type of a variable
 lookupGamma :: Ref -> TCM Type
 lookupGamma n = lookupE n . gamma <$> ask >>= \mt -> maybeErr mt id errMsg
-    where errMsg = "Variable reference" ++ show n ++ " not in scope!"
+    where errMsg = "Variable reference: " ++ showRef n ++ " is not in scope!"
 
 
 -- ##  Checking and equality  ## ---------------------------
@@ -185,10 +185,10 @@ appAt' m@(t,_T) e = case (e,_T) of
     assn <- phiExp phiS fT
     let u = IStruct assn
     return (IApp t u, Sub u r ® _V)
-  (CLam r1 fs x e', IFun (r2, IFun (g,ISig fT) _VInn) _VOut) -> do -- try to assign immediately
+  (CLam r1 fs x e', IFun (r2, IFun (_,ISig fT) (IFun (_,_U) _VInn)) _VOut) -> do -- try to assign immediately
     sg <- subSD fs fT
-    et <- addBind (g,sg) $ e' ⇇ _VInn
-    let u = (ILam (r1,sg) (ILam (x,_VInn) et))
+    et <- addBinds [(r1,sg),(x,_U)] $ e' ⇇ _VInn
+    let u = ILam (r1,sg) (ILam (x,_U) et)
     return (IApp t u, Sub u r2 ® _VOut)
   (_,_) -> do -- regular (t : T)@(u : U)
      (_U,u) <- infer e
