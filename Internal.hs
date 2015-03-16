@@ -293,12 +293,14 @@ sigmaFun s trm = case trm of
   (ISig ibs)     -> ISig    $ map intoBindings ibs
   (IStruct ass)  -> IStruct $ map intoAssignss ass
   (IProj t f)    -> projReduce $ IProj (go t) f
-  (IMeta x olds) -> IMeta x (s : olds)
+  (IMeta x olds) -> IMeta x (addIfInGamma x s olds)
   (IVar x)       -> subst x s
   _ -> trm -- Set and constants
  where go = sigmaFun s
        intoBindings (IBind n t) = IBind n $ go t
        intoAssignss (Ass   n t) = Ass   n $ go t
+       addIfInGamma (Meta _ _ (Env bs)) s@(Sub _ ref) =
+         if isJust (lookup ref bs) then (s :) else id
        subst x (Sub t y) = if x == y then t else IVar x
 
 -- Reduces a projection if possible
