@@ -100,7 +100,7 @@ check e _T = case (e,_T) of
         _V' = sub v1 v2 $ sub r1 r2 _V
         br = (r1,sg)
         bv = (v1,_U')
-    et <- addBinds [br,bv] $ e' ⇇ _V'
+    et <- addBinds [bv,br] $ e' ⇇ _V'
     return(ILam br (ILam bv et))
   (CEStr phiS, ISig fT) -> do
     say "Special struct check"
@@ -174,9 +174,11 @@ infFun (CBind x _D) _E = do
 infLam :: Ref -> FList -> Ref -> CExpr -> TCM (Type,Term)
 infLam r fv x e = do
   _T <- subSC fv
-  _U <- addBind (r,_T) $ freshMeta ISet
-  (_V,v) <- addBinds [(r,_T),(x,_U)] $ infer e
-  return (IFun (r, _T) (IFun (x,_U) _V), ILam (r,_T) (ILam (x,_U) v))
+  let br = (r,_T)
+  _U <- addBind br $ freshMeta ISet
+  let bv = (x,_U)
+  (_V,v) <- addBinds [bv, br] $ infer e
+  return (IFun br (IFun bv _V), ILam br (ILam bv v))
 
 -- f ⊆ T - subsequence constraint with a fresh meta for the type
 subSC :: FList -> TCM Type
