@@ -27,7 +27,6 @@ chkSet e = ChkProb postulates e SSet
 -- Identifiers
 _Eq = "Eq"
 _eq = "eq"
-_works = "works"
 _A = "A"
 _B = "B"
 _a = "a"

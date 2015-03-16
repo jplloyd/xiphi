@@ -18,8 +18,8 @@ postulate =
   
   ,(_Vec, fun dSet (fun dNat SSet))
   ,(_vnil, fun bASet (eapp2 cVec vA czero))
+
   ,(_vcons, origvconstype)
-  
   ,(_vflip, flipvconstype)
   ]
 
