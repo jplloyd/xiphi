@@ -7,6 +7,7 @@ import Core
 
 import Control.Monad
 import Data.Maybe
+import Data.List
 import Control.Monad.Reader
 import Control.Monad.Writer
 import Control.Monad.State
@@ -29,7 +30,6 @@ checkProblem posts typ trm = do
   term <- local (first (const sigm)) $ check trm type'
   return (ls,type',term)
 
-
 checkPostulates :: [(Name,CExpr)] -> TCM Sigma
 checkPostulates = go
   where go [] = return (Env [])
@@ -38,10 +38,32 @@ checkPostulates = go
           say $ "Checking the postulate " ++ n
           say "##############################"
           t <- check e ISet
+          t' <- instPerhaps t
           say $ "Adding " ++ n ++ " to Sigma"
-          (Env ls) <- local (first (liftE ((n,t):))) $ go rs
-          return (Env $ (n,t):ls)
+          (Env ls) <- local (first (liftE ((n,t'):))) $ go rs
+          return (Env $ (n,t'):ls)
 
+instPerhaps :: Term -> TCM Term
+instPerhaps t = do
+  (Xi _ _ cnstr metas') <- get
+  (cs,ms,t') <- resolve t cnstr metas'
+  modify (replConstr cs)
+  modify (replMetas ms)
+  return t'
+
+resolve :: Term -> [ContextConstraint] -> [Meta] -> TCM ([ContextConstraint],[Meta],Term)
+resolve t _cs ms = case _cs of
+  [] -> return ([],ms,t)
+  (CConstr _ (Assignment m _T):cs) -> do
+    say $ "Time to instantiate: " ++ show m ++ " with " ++ showTerm _T
+    let t' = instantiate m _T t
+    let ms' = delete m ms
+    resolve t' cs ms'
+  (c:cs) -> do
+    (cs',ms',t') <- resolve t cs ms
+    return (c:cs',ms',t')
+
+-- solve all Assignment constraints
 
 elabOptProblem :: [((Name,CExpr),Maybe Type)] -> CExpr -> (CExpr, Maybe Type) -> (Log, Xi, ([(Name,CExpr)], CExpr,CExpr), Either Error ([(Name,Type)],Type,Term))
 elabOptProblem posts termC typeC = (eLog,xi,(map fst posts,fst typeC,termC),term)

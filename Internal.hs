@@ -3,6 +3,7 @@ module Internal where
 
 -- import Data.Maybe
 import Data.List
+import Data.Maybe
 import Util
 import Types
 
@@ -54,6 +55,12 @@ data Meta = Meta Int Type Gamma
 -- NOTE: in order for the bind counter to be useful the value has to be initiated 
 -- with at least one higher than the highest bind generated during scope checking.
 data Xi = Xi {bindC :: Int, metaC :: Int, constraints :: [ContextConstraint], metas :: [Meta]}
+
+replConstr :: [ContextConstraint] -> Xi -> Xi
+replConstr cs xi = xi{constraints=cs}
+
+replMetas :: [Meta] -> Xi -> Xi
+replMetas ms xi = xi{metas=ms}
 
 -- Variable context
 data Env a = Env [(a,Term)]
@@ -156,7 +163,6 @@ showAsgn :: Assign -> String
 showAsgn (Pos t) = showTerm t
 showAsgn (Named n t) = n ++ " := " ++ showTerm t
 
-
 showAsgn' :: Assign' -> String
 showAsgn' (Ass n t) = n ++ " := " ++ showTerm t
 
@@ -177,6 +183,7 @@ data Constraint =
   | SubC Type [Field]              -- T<fv>
   | PrjC Type Term Field Term Type -- T<t.f> => Y : X
   | EquC Type Type Term Term       -- U = T ¦ X <- u
+  | Assignment Meta Term           -- Metavariable assignment
   deriving (Eq,Ord)
 
 instance Show Constraint where
@@ -188,7 +195,9 @@ instance Show Constraint where
     EquC _U _T _X u -> "EQ " ++ par (showTerm _U ++ " = " ++ showTerm _T)
                        ++ "\8224" ++  -- dagger
                        par (showTerm _X ++ arrowLeft ++ showTerm u)
+    Assignment (Meta n _T g) _ASSN -> "ASGN: _" ++ show n ++ " \8788 " ++ showTerm _ASSN
 
+showGamma :: Gamma -> String
 showGamma (Env ls) = brack . intercalate ", " . reverse $ map go ls
     where go (n,t) = showRef n ++ " : " ++ showTerm t
 
@@ -243,3 +252,106 @@ emptyXi = Xi 0 0 [] []
 -- Look something up in an environment
 lookupE :: (Ord a) => a -> Env a -> Maybe Term
 lookupE n (Env ls) = lookup n ls
+
+
+inContext :: Type -> Gamma -> Bool
+inContext _t g = go _t
+  where go ISet = True
+        go (IVar r) = isJust . lookupE r $ g
+        go (ICns _) = True
+        go (IFun (r,_T) _U) = go _T && inContext _U (addBind (r,_T) g)
+        go (ILam (r,_T) t) = go _T && inContext t (addBind (r,_T) g)
+        go (IApp t1 t2) = go t1 && go t2
+        go (ISig bs) = inContBs bs g
+        go (IStruct as) = inContAs as g
+        go (IProj t _) = go t
+        go _ = False
+
+inContBs :: [IBind] -> Gamma -> Bool
+inContBs _bs g = go _bs
+  where go [] = True
+        go (IBind f _T:bs) = inContext _T g && inContBs bs (addBind (field f,_T) g)
+
+inContAs :: [Assign'] -> Gamma -> Bool
+inContAs _as g = go _as
+  where go [] = True
+        go (Ass _ t:as) = inContext t g && go as
+
+
+-- ##  Substitution/Reduction ##  --------------------------
+
+(®) :: Substitution -> Term -> Term
+(®) = sigmaFun
+
+-- sigmaFun should always return a fully projReduced term
+sigmaFun :: Substitution -> Term -> Term
+sigmaFun s trm = case trm of
+  (IFun (r,u) v) -> IFun (r,go u) (go v)
+  (ILam (r,u) v) -> ILam (r,go u) (go v)
+  (IApp t1 t2)   -> IApp (go t1) (go t2)
+  (ISig ibs)     -> ISig    $ map intoBindings ibs
+  (IStruct ass)  -> IStruct $ map intoAssignss ass
+  (IProj t f)    -> projReduce $ IProj (go t) f
+  (IMeta x olds) -> IMeta x (s : olds)
+  (IVar x)       -> subst x s
+  _ -> trm -- Set and constants
+ where go = sigmaFun s
+       intoBindings (IBind n t) = IBind n $ go t
+       intoAssignss (Ass   n t) = Ass   n $ go t
+       subst x (Sub t y) = if x == y then t else IVar x
+
+-- Reduces a projection if possible
+projReduce :: Term -> Term
+projReduce (IProj (IStruct ass) f) = structLookup' ass f
+projReduce t = t
+
+-- point of hard failure, tough
+structLookup' :: [Assign'] -> Field -> Term
+structLookup' as f = go as
+  where go [] = error $ "Attempted projection on nonexistent field: " ++ show f
+        go (Ass f' t:as') = if f' == f then t else go as'
+-- replace meta with second argument in the third argument
+instantiate :: Meta -> Term -> Term -> Term
+instantiate (Meta n _ _) subT = go
+  where go _t = case _t of
+          IFun (r,t) t' -> IFun (r, go t) (go t')
+          ILam (r,t) t' -> ILam (r,go t) (go t')
+          IApp t1 t2 -> IApp (go t1) (go t2)
+          ISig bs -> ISig $ instBinds bs
+          IStruct assn -> IStruct $ instAssgn assn
+          IProj t f -> IProj (go t) f
+          IMeta (Meta n' _ _) sb -> if n == n' then foldl (flip sigmaFun) subT sb else _t
+          _ -> _t
+        instBinds = foldr (\(IBind f t) -> (IBind f (go t):)) []
+        instAssgn = foldr (\(Ass f t) -> (Ass f (go t):)) []
+
+
+-- ## Inefficient term equality ## -------------------------
+
+-- Term equality using substitutions
+(=$=) :: Type -> Type -> Bool
+_A =$= _B = case (_A,_B) of
+  (ISet,ISet) -> True
+  (ICns r,ICns r') -> r == r'
+  (IVar n, IVar n') -> n == n'
+  (IFun (r,_T) _U,IFun (r',_T') _U') -> _T =$= _T' && _U =$= (Sub (IVar r) r' ® _U')
+  (ILam (r,_T) t, ILam (r',_T') t') ->  _T =$= _T' && t =$= (Sub (IVar r) r' ® t')
+  (IApp t u, IApp t' u') -> t =$= t' && u =$= u'
+  (ISig bs, ISig bs') -> bs =£= bs'
+  (IStruct as, IStruct as') -> as =€= as'
+  (IProj t f, IProj t' f') -> f == f' && t =$= t'
+  (IMeta (Meta n _T g) [], IMeta (Meta n' _T' g') []) -> n == n' && _T =$= _T' -- contexts?
+  (_,_) -> False
+
+(=£=) :: [IBind] -> [IBind] -> Bool
+(=£=) = go
+  where go [] [] = True
+        go (IBind f _T:bs) (IBind f' _T':bs') = f == f' && _T =$= _T' && bs =£= bs'
+        go _ _ = False
+
+
+(=€=) :: [Assign'] -> [Assign'] -> Bool
+(=€=) = go
+  where go [] [] = True
+        go (Ass f t:bs) (Ass f' t':bs') = f == f' && t =$= t' && bs =€= bs'
+        go _ _ = False

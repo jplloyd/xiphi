@@ -101,11 +101,28 @@ check e _T = sayRule CheckGen >> do
 -- Equality will either resolve immediately through reflexivity - or generate an equality constraint
 -- even better would be to just check if they are wrong straight away (very much possible)
 genEq :: Term -> Type -> Type -> TCM Term
-genEq u _U _T | _T == _U = sayRule EqRedRefl >> return u
+genEq u _U _T | _T =$= _U = sayRule EqRedRefl >> return u
+              | _T =@= _U = say "adding assignment instead left" >> addAss _T _U >> return u
+              | _T =@@= _U = say "adding assignment instead right" >> addAss _U _T >> return u
               | otherwise = sayRule EqRedGenC >> do
+                  say $ "The types: " ++ showTerm _T ++ " and " ++ showTerm _U ++
+                    " are not equal, generating equality constraint."
                   _Y <- freshMeta _T
                   addC (EquC _U _T _Y u)
                   return _Y
+
+addAss (IMeta m s) _U = addC (Assignment m _U)
+
+
+-- meta eq - left
+(=@=) :: Type -> Type -> Bool
+(IMeta (Meta _ _T g) []) =@= _U = _T == ISet && _U `inContext` g
+_                        =@= _  = False
+
+-- meta eq right
+(=@@=) :: Type -> Type -> Bool
+_U =@@= (IMeta (Meta _ _T g) []) = _T == ISet && _U `inContext` g
+_  =@@= _                        = False
 
 
 -- ##  Inference rules  ## ---------------------------------
@@ -152,7 +169,7 @@ infLam r fv x e = do
   (_V,v) <- addBinds [(r,_T),(x,_U)] $ infer e
   return (IFun (r, _T) (IFun (x,_U) _V), ILam (r,_T) (ILam (x,_U) v))
 
--- f ⊆ T - special subsequence constraint things
+-- f ⊆ T - subsequence constraint with a fresh meta for the type
 subSC :: FList -> TCM Type
 subSC fl = do
   _X <- freshMeta ISet
@@ -168,54 +185,55 @@ infApp e1 e2 = do
   return (_V,v)
 
 -- Bypass expansion and subsequence constraints when possible
+-- by matching on function types and argument expressions
 appAt' :: (Term,Type) -> CExpr -> TCM (Term,Type)
 appAt' m@(t,_T) e = case (e,_T) of
   (CEStr phiS, IFun (r,ISig fT) _V) -> do -- try to expand immediately
     assn <- phiExp phiS fT
     let u = IStruct assn
-    return (IApp t u, sigmaFun (Sub u r) _V)
+    return (IApp t u, Sub u r ® _V)
   (CLam r1 fs x e', IFun (r2, IFun (g,ISig fT) _VInn) _VOut) -> do -- try to assign immediately
     sg <- subSD fs fT
     et <- addBind (g,sg) $ e' ⇇ _VInn
     let u = (ILam (r1,sg) (ILam (x,_VInn) et))
-    return (IApp t u,sigmaFun (Sub u r2) _VOut)
+    return (IApp t u, Sub u r2 ® _VOut)
   (_,_) -> do -- regular (t : T)@(u : U)
-    (_U,u) <- infer e
-    appAt m (u,_U)
+     (_U,u) <- infer e
+     appAt m (u,_U)
 
 -- (t : T)@(u : U) ~> v
 -- If the thing is a known function type - run equality check (deferred or not)
 appAt :: (Term,Type) -> (Term,Type) -> TCM (Term,Type)
 appAt (t, IFun (x, _U') _V) (u, _U) = sayRule AppKnown >> do
   u' <- genEq u _U _U'
-  return (IApp t u', sigmaFun (Sub u' x) _V)
+  return (IApp t u', Sub u' x ® _V)
 appAt (t,_T) (u,_U) = sayRule AppUnknown >> do
   x  <- freshBind 
   _Y <- addBind (x,_U) $ freshMeta ISet
   t' <- genEq t _T (IFun (x,_U) _Y)
-  return (IApp t' u, sigmaFun (Sub u x) _Y)
+  return (IApp t' u, Sub u x ® _Y)
 
 -- Expand structs, inserting metavariables for missing arguments
 -- fails if there are too many arguments (relative to expl. assignments)
 phiExp :: [CAssign] -> [IBind] -> TCM [Assign']
-phiExp [] [] = return []
-phiExp _ [] = throwError "Expansion failed miserably!"
-phiExp as bs = go as bs
-  where go [] (IBind f _T : bs) = nomatch f _T [] bs
-        go assn@(as:ass) (IBind f _T : bs) = case as of
+phiExp []  [] = return []
+phiExp _   [] = throwError "Too many/out-of-order arguments for expansion!"
+phiExp _as (IBind f _T : bs) = go _as
+  where go [] = nomatch []
+        go assn@(as:ass) = case as of
             CPos e -> match e
             CNamed f' e ->
               if f == f'
               then match e
-              else nomatch f _T assn bs
+              else nomatch assn
           where match e = do
-                (_T',t) <- infer e
-                t' <- genEq t _T' _T
-                assn' <- go ass bs
-                return (Ass f t' : assn')
-        nomatch f _T assn bs = do
+                  (_T',t) <- infer e
+                  t' <- genEq t _T' _T
+                  assn' <- phiExp ass bs
+                  return (Ass f t' : assn')
+        nomatch assn = do
                 t <- freshMeta _T
-                assn' <- go assn bs
+                assn' <- phiExp assn bs
                 return (Ass f t : assn')
 
 -- Check if the bindings are a subsequence of declarations from a sig,
@@ -356,37 +374,6 @@ data Rule =
  | AddConstraint --           <
 -- ============================
   deriving Show
-
-
--- ##  Substitution/Reduction ##  --------------------------
-
--- sigmaFun should always return a fully projReduced term
-sigmaFun :: Substitution -> Term -> Term
-sigmaFun s trm = case trm of
-  (IFun (r,u) v) -> IFun (r,go u) (go v)
-  (ILam (r,u) v) -> ILam (r,go u) (go v)
-  (IApp t1 t2)   -> IApp (go t1) (go t2)
-  (ISig ibs)     -> ISig    $ map intoBindings ibs
-  (IStruct ass)  -> IStruct $ map intoAssignss ass
-  (IProj t f)    -> projReduce $ IProj (go t) f
-  (IMeta x olds) -> IMeta x (s : olds)
-  (IVar x)       -> subst x s
-  _ -> trm -- Set and constants
- where go = sigmaFun s
-       intoBindings (IBind n t) = IBind n $ go t
-       intoAssignss (Ass   n t) = Ass   n $ go t
-       subst x (Sub t y) = if x == y then t else IVar x
-
--- Reduces a projection if possible
-projReduce :: Term -> Term
-projReduce (IProj (IStruct ass) f) = structLookup' ass f
-projReduce t = t
-
--- point of hard failure, tough
-structLookup' :: [Assign'] -> Field -> Term
-structLookup' as f = go as
-  where go [] = error $ "Attempted projection on nonexistent field: " ++ show f
-        go (Ass f' t:as') = if f' == f then t else go as'
 
 
 -- monadic versions, but these errors will only appear if programming in Core directly
