@@ -1,4 +1,4 @@
-module CalcLamSol where
+module ObsoleteLamSol where
 
 import Internal
 import Types

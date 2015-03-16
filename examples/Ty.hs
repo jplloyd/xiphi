@@ -1,4 +1,4 @@
-module CalcTy where
+module Ty where
 
 import Surface
 import CheckHub
@@ -15,13 +15,12 @@ postulate =
   [(_f, eTy)]
 
 -- Type checking problems
-fOnly = ChkProb postulate SSet SSet
-
-works = chkProbeTy cf
-fails = chkProbeTy $ lamgappf vg
-hacks = chkProbeTy $ lamgappf (SLam [_b] _t $ SApp vg [SPos vb] vt)
+simple = ChkProb postulate SSet SSet
+works = chkTy cf
+fails = chkTy $ lamgappf vg
+hacks = chkTy $ lamgappf (SLam [_b] _t $ SApp vg [SPos vb] vt)
 -- where
-chkProbeTy e = ChkProb postulate e eTy
+chkTy e = ChkProb postulate e eTy
 lamgappf = elam1 _g . eapp1 cf
 
 
