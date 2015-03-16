@@ -102,27 +102,20 @@ check e _T = sayRule CheckGen >> do
 -- even better would be to just check if they are wrong straight away (very much possible)
 genEq :: Term -> Type -> Type -> TCM Term
 genEq u _U _T | _T =$= _U = sayRule EqRedRefl >> return u
-              | _T =@= _U = say "adding assignment instead left" >> addAss _T _U >> return u
-              | _T =@@= _U = say "adding assignment instead right" >> addAss _U _T >> return u
+              | _T =@= _U = say "Left meta assignment" >> addAss _T _U >> return u
+              | _U =@= _T = say "Right meta assignment" >> addAss _U _T >> return u
               | otherwise = sayRule EqRedGenC >> do
                   say $ "The types: " ++ showTerm _T ++ " and " ++ showTerm _U ++
                     " are not equal, generating equality constraint."
                   _Y <- freshMeta _T
                   addC (EquC _U _T _Y u)
                   return _Y
+  where addAss (IMeta m s) _U = addC (Assignment m _U)
 
-addAss (IMeta m s) _U = addC (Assignment m _U)
 
-
--- meta eq - left
 (=@=) :: Type -> Type -> Bool
 (IMeta (Meta _ _T g) []) =@= _U = _T == ISet && _U `inContext` g
 _                        =@= _  = False
-
--- meta eq right
-(=@@=) :: Type -> Type -> Bool
-_U =@@= (IMeta (Meta _ _T g) []) = _T == ISet && _U `inContext` g
-_  =@@= _                        = False
 
 
 -- ##  Inference rules  ## ---------------------------------
