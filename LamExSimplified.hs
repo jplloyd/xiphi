@@ -3,7 +3,9 @@ module LamExSimplified (works,fails) where
 import Surface
 import CheckHub
 import CalcLamSol
-
+import Internal
+import Types
+import Util
 
 eBool = fun dSet (fun dSet SSet)
 etrue = elam2 _x _y vx
@@ -28,13 +30,23 @@ worksDef = (eapp2 cw eq_true eid)
 
 failsDef = (eapp2 cf eid eq_true)
 
---postTypes = [Just _EqType, Just eqType, Just wType, Just fType]
+postTypes = [_EqT, eqT, wT, fT]
 
---opt def = OCP (zip postulates postTypes) def (SSet,Nothing)
+opt def = OCP (maybezipR postulates postTypes) def (SSet,Nothing)
 
---worksOpt = opt worksDef
+worksOpt = opt worksDef
 
---failsOpt = opt failsDef
+failsOpt = opt failsDef
+
+
+_EqT = IFun (V RecBind 0,ISig [IBind {ibF = "A", ibTerm = ISet}]) (IFun (V VarBind 0,IProj (IVar (V RecBind 0)) "A") ISet)
+
+eqT = IFun (V RecBind 1,ISig [IBind {ibF = "B", ibTerm = ISet}]) (IFun (V VarBind 1,IProj (IVar (V RecBind 1)) "B") (IApp (IApp (ICns "Eq") (IStruct [Ass {assF = "A", assTerm = IProj (IVar (V RecBind 1)) "B"}])) (IVar (V VarBind 1))))
+
+wT = IFun (V RecBind 4,ISig [IBind {ibF = "b", ibTerm = IFun (V RecBind 2,ISig []) (IFun (V VarBind 2,ISet) (IFun (V RecBind 3,ISig []) (IFun (V VarBind 3,ISet) ISet)))}]) (IFun (V VarBind 4,IApp (IApp (ICns "Eq") (IStruct [Ass {assF = "A", assTerm = IFun (V RecBind 2,ISig []) (IFun (V VarBind 2,ISet) (IFun (V RecBind 3,ISig []) (IFun (V VarBind 3,ISet) ISet)))}])) (IProj (IVar (V RecBind 4)) "b")) (IFun (V RecBind 5,ISig []) (IFun (V VarBind 5,IApp (IApp (IApp (IApp (IProj (IVar (V RecBind 4)) "b") (IStruct [])) (IFun (V RecBind 6,ISig [IBind {ibF = "A", ibTerm = ISet}]) (IFun (V VarBind 6,IProj (IVar (V RecBind 6)) "A") (IProj (IVar (V RecBind 6)) "A")))) (IStruct [])) (IFun (V RecBind 7,ISig []) (IFun (V VarBind 7,ISet) ISet))) ISet)))
+
+fT = IFun (V RecBind 10,ISig [IBind {ibF = "b", ibTerm = IFun (V RecBind 8,ISig []) (IFun (V VarBind 8,ISet) (IFun (V RecBind 9,ISig []) (IFun (V VarBind 9,ISet) ISet)))}]) (IFun (V VarBind 10,IApp (IApp (IApp (IApp (IProj (IVar (V RecBind 10)) "b") (IStruct [])) (IFun (V RecBind 11,ISig [IBind {ibF = "A", ibTerm = ISet}]) (IFun (V VarBind 11,IProj (IVar (V RecBind 11)) "A") (IProj (IVar (V RecBind 11)) "A")))) (IStruct [])) (IFun (V RecBind 12,ISig []) (IFun (V VarBind 12,ISet) ISet))) (IFun (V RecBind 13,ISig []) (IFun (V VarBind 13,IApp (IApp (ICns "Eq") (IStruct [Ass {assF = "A", assTerm = IFun (V RecBind 8,ISig []) (IFun (V VarBind 8,ISet) (IFun (V RecBind 9,ISig []) (IFun (V VarBind 9,ISet) ISet)))}])) (IProj (IVar (V RecBind 10)) "b")) ISet)))
+
 
 
 -- Identifiers

@@ -91,6 +91,11 @@ lookupGamma n = lookupE n . gamma <$> ask >>= \mt -> maybeErr mt id errMsg
 
 -- Check a core expression against a type
 check :: CExpr -> Type -> TCM Term
+check (CLam r1 fs x e') (IFun (_,ISig fT) (IFun (_,_U) _VInn)) = do
+   say "Catching subsequence checking directly in check"
+   sg <- subSD fs fT
+   et <- addBinds [(r1,sg),(x,_U)] $ e' ⇇ _VInn
+   return $ ILam (r1,sg) (ILam (x,_U) et)
 check e _T = sayRule CheckGen >> do
   (_U,u) <- infer e
   genEq u _U _T

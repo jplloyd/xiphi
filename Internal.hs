@@ -154,7 +154,7 @@ instance Show Meta where
   show (Meta n _ _) = "_" ++ show n
 
 showMeta :: Meta -> String
-showMeta (Meta n t g) = par ("_" ++ show n ++ " : " ++ showTerm t) -- ++ "\n\t\915 = " ++ showGamma g
+showMeta (Meta n t g) = par ("_" ++ show n ++ " : " ++ showTerm t) ++ "\n\t\915 = " ++ showGamma g
 
 showIB :: IBind -> String
 showIB (IBind n t) = n ++ " : " ++ showTerm t
@@ -265,7 +265,8 @@ inContext _t g = go _t
         go (ISig bs) = inContBs bs g
         go (IStruct as) = inContAs as g
         go (IProj t _) = go t
-        go _ = False
+        go (IMeta _ _) = True
+--        go _ = False
 
 inContBs :: [IBind] -> Gamma -> Bool
 inContBs _bs g = go _bs
