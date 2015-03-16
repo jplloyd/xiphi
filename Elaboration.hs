@@ -91,17 +91,28 @@ lookupGamma n = lookupE n . gamma <$> ask >>= \mt -> maybeErr mt id errMsg
 
 -- Check a core expression against a type
 check :: CExpr -> Type -> TCM Term
-check (CLam r1 fs x e') (IFun (_,ISig fT) (IFun (_,_U) _VInn)) = do
-   say "Catching subsequence checking directly in check"
-   sg <- subSD fs fT
-   et <- addBinds [(r1,sg),(x,_U)] $ e' ⇇ _VInn
-   return $ ILam (r1,sg) (ILam (x,_U) et)
-check e _T = sayRule CheckGen >> do
-  (_U,u) <- infer e
-  genEq u _U _T
+check e _T = case (e,_T) of
+  (CLam r1 fs v1 e', IFun (r2,ISig fT) (IFun (v2,_U) _V)) -> do
+    say "Special lambda check"
+    sg <- subSD fs fT
+    let sub _1 _2 = (Sub (IVar _1) _2 ®)
+        _U' = sub r1 r2 _U
+        _V' = sub v1 v2 $ sub r1 r2 _V
+        br = (r1,sg)
+        bv = (v1,_U')
+    et <- addBinds [br,bv] $ e' ⇇ _V'
+    return(ILam br (ILam bv et))
+  (CEStr phiS, ISig fT) -> do
+    say "Special struct check"
+    assn <- phiExp phiS fT
+    return (IStruct assn)
+  _ -> sayRule CheckGen >> do
+    (_U,u) <- infer e
+    genEq u _U _T
 
 (⇇) :: CExpr -> Type -> TCM Term
 (⇇) = check
+
 
 -- Equality will either resolve immediately through reflexivity - or generate an equality constraint
 -- even better would be to just check if they are wrong straight away (very much possible)
@@ -115,12 +126,12 @@ genEq u _U _T | _T =$= _U = sayRule EqRedRefl >> return u
                   _Y <- freshMeta _T
                   addC (EquC _U _T _Y u)
                   return _Y
-  where addAss (IMeta m s) _U = addC (Assignment m _U)
+--  where addAss (IMeta m _) _U = addC (Assignment m _U)
 
 
-(=@=) :: Type -> Type -> Bool
-(IMeta (Meta _ _T g) []) =@= _U = _T == ISet && _U `inContext` g
-_                        =@= _  = False
+--(=@=) :: Type -> Type -> Bool
+--(IMeta (Meta _ _T g) []) =@= _U = _T == ISet && _U `inContext` g
+--_                        =@= _  = False
 
 
 -- ##  Inference rules  ## ---------------------------------
@@ -179,37 +190,22 @@ subSC fl = do
 infApp :: CExpr -> CExpr -> TCM (Type,Term)
 infApp e1 e2 = do
   (_T,t) <- infer e1
-  (v,_V) <- appAt' (t,_T) e2
+  (v,_V) <- appAt (t,_T) e2
   return (_V,v)
 
--- Bypass expansion and subsequence constraints when possible
--- by matching on function types and argument expressions
-appAt' :: (Term,Type) -> CExpr -> TCM (Term,Type)
-appAt' m@(t,_T) e = case (e,_T) of
-  (CEStr phiS, IFun (r,ISig fT) _V) -> do -- try to expand immediately
-    assn <- phiExp phiS fT
-    let u = IStruct assn
-    return (IApp t u, Sub u r ® _V)
-  (CLam r1 fs x e', IFun (r2, IFun (_,ISig fT) (IFun (_,_U) _VInn)) _VOut) -> do -- try to assign immediately
-    sg <- subSD fs fT
-    et <- addBinds [(r1,sg),(x,_U)] $ e' ⇇ _VInn
-    let u = ILam (r1,sg) (ILam (x,_U) et)
-    return (IApp t u, Sub u r2 ® _VOut)
-  (_,_) -> do -- regular (t : T)@(u : U)
-     (_U,u) <- infer e
-     appAt m (u,_U)
-
--- (t : T)@(u : U) ~> v
--- If the thing is a known function type - run equality check (deferred or not)
-appAt :: (Term,Type) -> (Term,Type) -> TCM (Term,Type)
-appAt (t, IFun (x, _U') _V) (u, _U) = sayRule AppKnown >> do
-  u' <- genEq u _U _U'
-  return (IApp t u', Sub u' x ® _V)
-appAt (t,_T) (u,_U) = sayRule AppUnknown >> do
-  x  <- freshBind 
-  _Y <- addBind (x,_U) $ freshMeta ISet
-  t' <- genEq t _T (IFun (x,_U) _Y)
-  return (IApp t' u, Sub u x ® _Y)
+-- (t : T)@e ~> (v : V)
+-- If the thing is a known function type - check against domain
+appAt :: (Term,Type) -> CExpr -> TCM (Term,Type)
+appAt (t, _T) e = case _T of
+  (IFun (x, _U) _V) -> sayRule AppKnown >> do
+    u <- e ⇇ _U
+    return (IApp t u, Sub u x ® _V)
+  _ -> sayRule AppUnknown >> do
+    (_U,u) <- infer e
+    x  <- freshBind 
+    _Y <- addBind (x,_U) $ freshMeta ISet
+    t' <- genEq t _T (IFun (x,_U) _Y)
+    return (IApp t' u, Sub u x ® _Y)
 
 -- Expand structs, inserting metavariables for missing arguments
 -- fails if there are too many arguments (relative to expl. assignments)
