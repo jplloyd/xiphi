@@ -14,7 +14,7 @@ emono = fun dSet SSet
 -- Postulates
 postulates =
   [(_Eq, funASet dA SSet)
-  ,(_eq, funBSet baB (appEq vB va))
+  ,(_eq, funBSet baB (appEq va))
   ,(_w, funbBool dappEq_vb (fun difb SSet))
   ,(_f, funbBool difb (fun dappEq_vb SSet))
   ]
@@ -75,7 +75,7 @@ bbBool = SBind _b eBool
 -- Dummy bindings
 dSet = dummy SSet
 dA = dummy vA
-dappEq_vb = dummy (appEq eBool vb)
+dappEq_vb = dummy (appEq vb)
 difb = dummy (eapp2 vb epoly emono)
 
 -- Function abstractions
@@ -91,7 +91,7 @@ eapp2 fe ae1 ae2 = eapp1 (eapp1 fe ae1) ae2
 elam1 n1 e = SLam [] n1 e
 elam2 n1 n2 e = elam1 n1 (elam1 n2 e)
 
-appEq impl = SApp cEq [SPos impl]
+appEq = eapp1 cEq
 dummy = SBind "£"
 
 funASet = SFun [bASet]

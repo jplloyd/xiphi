@@ -101,15 +101,11 @@ check e _T = sayRule CheckGen >> do
 -- Equality will either resolve immediately through reflexivity - or generate an equality constraint
 -- even better would be to just check if they are wrong straight away (very much possible)
 genEq :: Term -> Type -> Type -> TCM Term
-genEq u _U _T | _T =?= _U = sayRule EqRedRefl >> return u
+genEq u _U _T | _T == _U = sayRule EqRedRefl >> return u
               | otherwise = sayRule EqRedGenC >> do
                   _Y <- freshMeta _T
                   addC (EquC _U _T _Y u)
                   return _Y
--- A little alpha conv optimization. Pretty much all we can do while deriving Eq.
-  where (IFun (x1,_U1) _V1) =?= (IFun (x2,_U2) _V2) = 
-          (_U1 =?= _U2) && (_V1 =?= sigmaFun (Sub (IVar x1) x2) _V2)
-        type1 =?= type2 = type1 == type2
 
 
 -- ##  Inference rules  ## ---------------------------------
