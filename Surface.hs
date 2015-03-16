@@ -54,9 +54,9 @@ instance Show SExpr where
   show e' = case e' of 
    SSet -> "Set"
    SVar n -> n
-   SCns n -> "Const_" ++ n
+   SCns n -> surround "<" ">"  n
    SFun impl expl cod -> pTele True impl ++ " " ++ pBind False expl ++ arrowRight ++ show cod
-   SApp e1 impl e2 -> par (show e1 ++ " " ++ pAssgn impl) ++ " " ++ show e2
+   SApp e1 impl e2 -> (show e1 ++ " " ++ pAssgn impl) ++ " " ++ par (show e2)
    SLam impl var e -> par $ "\\" ++ concatMap brace impl ++ " " ++ var ++ arrowRight ++ show e
    SWld -> "_"
 
