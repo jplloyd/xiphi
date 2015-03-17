@@ -1,0 +1,303 @@
+-- surface postulates
+Eq : {A:Set} (£:A) → Set
+eq : {B:Set} (a:B) → <Eq> {B} (a)
+w : {b: (£:Set) →  (£:Set) → Set} (£:<Eq> { (£:Set) →  (£:Set) → Set} (b)) →  (£:b  ({A:Set} (£:A) → A)  ( (£:Set) → Set)) → Set
+f : {b: (£:Set) →  (£:Set) → Set} (£:b  ({A:Set} (£:A) → A)  ( (£:Set) → Set)) →  (£:<Eq> { (£:Set) →  (£:Set) → Set} (b)) → Set
+
+ == Postulates == 
+Eq : ((r₀ : sig{A : Set}) → 
+     ((v₀ : r₀.A) → 
+       Set))
+eq : ((r₁ : sig{B : Set}) → 
+     ((v₁ : r₁.B) → 
+       ((<Eq>) struct{A := r₁.B}) v₁))
+w : ((r₄ : sig{b : ((r₂ : sig{}) → 
+                   ((v₂ : Set) → 
+                   ((r₃ : sig{}) → 
+                   ((v₃ : Set) → 
+                     Set))))}) → 
+    ((v₄ : ((<Eq>) struct{A := ((r₅ : sig{}) → 
+                               ((v₅ : Set) → 
+                               ((r₆ : sig{}) → 
+                               ((v₆ : Set) → 
+                                 Set))))}) 
+                   r₄.b) → 
+    ((r₇ : sig{}) → 
+    ((v₇ : ((((r₄.b) struct{}) ((r₈ : sig{A : Set}) → 
+                               ((v₈ : r₈.A) → 
+                                 r₈.A))) 
+                     struct{}) ((r₉ : sig{}) → 
+                               ((v₉ : Set) → 
+                                 Set))) → 
+      Set))))
+f : ((r₁₂ : sig{b : ((r₁₀ : sig{}) → 
+                    ((v₁₀ : Set) → 
+                    ((r₁₁ : sig{}) → 
+                    ((v₁₁ : Set) → 
+                      Set))))}) → 
+    ((v₁₂ : ((((r₁₂.b) struct{}) ((r₁₃ : sig{A : Set}) → 
+                                 ((v₁₃ : r₁₃.A) → 
+                                   r₁₃.A))) 
+                       struct{}) ((r₁₄ : sig{}) → 
+                                 ((v₁₄ : Set) → 
+                                   Set))) → 
+    ((r₁₅ : sig{}) → 
+    ((v₁₅ : ((<Eq>) struct{A := ((r₁₆ : sig{}) → 
+                                ((v₁₆ : Set) → 
+                                ((r₁₇ : sig{}) → 
+                                ((v₁₇ : Set) → 
+                                  Set))))}) r₁₂.b) → 
+    Set))))
+
+
+-- surface type
+Set
+
+ == Elab type == 
+Set
+
+
+
+-------------------------------------
+works:
+
+-- surface term
+<w>  (<eq> { (£:Set) →  (£:Set) → Set} ((\ x → (\ y → x))))  ((\ z → z))
+
+ == Elab term == 
+((((<w>) struct{b := _0}) _1) struct{}) _4
+
+
+Number of metas: 5
+Number of constraints: 3
+
+== Metavariables ==
+
+(_0 : ((r₂ : sig{}) → 
+      ((v₂ : Set) → 
+      ((r₃ : sig{}) → 
+      ((v₃ : Set) → 
+        Set)))))
+(_1 : ((<Eq>) struct{A := ((r₅ : sig{}) → 
+                          ((v₅ : Set) → 
+                          ((r₆ : sig{}) → 
+                          ((v₆ : Set) → Set))))}) 
+                            _0)
+(_2 : Set)
+(_3 : Set)
+(_4 : ((((_0) struct{}) ((r₈ : sig{A : Set}) → 
+                        ((v₈ : r₈.A) → 
+                          r₈.A))) 
+              struct{}) ((r₉ : sig{}) → 
+                        ((v₉ : Set) → 
+                          Set)))
+
+All metas with context
+	Γ = []
+
+_3 also extended with
+	Γ = [r₂₂ : _2]
+
+
+== Constraints == 
+
+EQ (((<Eq>) struct{A := ((r₁₈ : sig{}) → ((v₁₈ : Set) → ((r₁₉ : sig{}) → ((v₁₉ : Set) → Set))))}) 
+            (\(r₂₀ : sig{}) → (\(v₂₀ : Set) → (\(r₂₁ : sig{}) → (\(v₂₁ : Set) → v₂₀))))
+  = ((<Eq>) struct{A := ((r₅  : sig{}) → ((v₅  : Set) → ((r₆  : sig{}) → ((v₆  : Set) → Set))))}) 
+            _0)
+
+†(_1← ((<eq>) struct{B := ((r₁₈ : sig{}) → 
+                          ((v₁₈ : Set) → 
+                          ((r₁₉ : sig{}) → 
+                          ((v₁₉ : Set) → 
+                            Set))))}) 
+              (\(r₂₀ : sig{}) → 
+              (\(v₂₀ : Set) → 
+              (\(r₂₁ : sig{}) → 
+              (\(v₂₁ : Set) → 
+                 v₂₀)))))
+
+
+SB _2⟨[]⟩
+
+
+EQ (((r₂₂ : _2) → 
+    ((v₂₂ : _3) → 
+      _3))
+ = ((((_0) struct{}) ((r₈ : sig{A : Set}) → 
+                     ((v₈ : r₈.A) → 
+                       r₈.A))) 
+           struct{}) ((r₉ : sig{}) → 
+                     ((v₉ : Set) → 
+                       Set)))
+
+†(_4← (\(r₂₂ : _2) → (\(v₂₂ : _3) → v₂₂)))
+
+
+== Solution == 
+
+_0 <- (\(r₂₀ : sig{}) → 
+      (\(v₂₀ : Set) → 
+      (\(r₂₁ : sig{}) → 
+      (\(v₂₁ : Set) → 
+         v₂₀)))
+_1 <- ((<eq>) struct{B := ((r₁₈ : sig{}) → 
+                          ((v₁₈ : Set) → 
+                          ((r₁₉ : sig{}) → 
+                          ((v₁₉ : Set) → 
+                            Set))))}) 
+              (\(r₂₀ : sig{}) → 
+              (\(v₂₀ : Set) → 
+              (\(r₂₁ : sig{}) → 
+              (\(v₂₁ : Set) → 
+                 v₂₀)))))
+_2 <- sig{A : Set}
+_3 <- r₂₂.A
+_4 <- (\(r₂₂ : sig{A : Set}) → 
+      (\(v₂₂ : r₂₂.A) → 
+         v₂₂))
+
+Type checked term:
+((((<w>) struct{b := (\(r₂₀ : sig{}) → 
+                     (\(v₂₀ : Set) → 
+                     (\(r₂₁ : sig{}) → 
+                     (\(v₂₁ : Set) → 
+                        v₂₀)))}) 
+         ((<eq>) struct{B := ((r₁₈ : sig{}) → 
+                             ((v₁₈ : Set) → 
+                             ((r₁₉ : sig{}) → 
+                             ((v₁₉ : Set) → 
+                               Set))))}) 
+                 (\(r₂₀ : sig{}) → 
+                 (\(v₂₀ : Set) → 
+                 (\(r₂₁ : sig{}) → 
+                 (\(v₂₁ : Set) → 
+                    v₂₀)))))) 
+         struct{}) 
+         (\(r₂₂ : sig{A : Set}) → 
+         (\(v₂₂ : r₂₂.A) → 
+            v₂₂))
+
+
+
+
+
+-------------------------------------
+fails:
+
+-- surface term
+<f>  ((\ z → z))  (<eq> { (£:Set) →  (£:Set) → Set} ((\ x → (\ y → x))))
+
+ == Elab term == 
+((((<f>) struct{b := _0}) _3) struct{}) _4
+
+Number of metas: 5
+Number of constraints: 3
+
+== Metavariables ==
+
+(_0 : ((r₁₀ : sig{}) → 
+      ((v₁₀ : Set) → 
+      ((r₁₁ : sig{}) → 
+      ((v₁₁ : Set) → 
+        Set)))))
+(_1 : Set)
+(_2 : Set)
+(_3 : ((((_0) struct{}) ((r₁₃ : sig{A : Set}) → 
+                        ((v₁₃ : r₁₃.A) → 
+                          r₁₃.A))) 
+              struct{}) ((r₁₄ : sig{}) → (
+                         (v₁₄ : Set) → 
+                          Set)))
+(_4 : ((<Eq>) struct{A := ((r₁₆ : sig{}) → 
+                          ((v₁₆ : Set) → 
+                          ((r₁₇ : sig{}) → 
+                          ((v₁₇ : Set) → 
+                            Set))))}) 
+              _0)
+
+All metas with context
+	Γ = []
+
+_2 also extended with
+	Γ = [r₁₈ : _1]
+
+== Constraints == 
+
+SB _1⟨[]⟩
+
+
+EQ (((r₁₈ : _1) → 
+    ((v₁₈ : _2) → 
+      _2))
+ = ((((_0) struct{}) ((r₁₃ : sig{A : Set}) → 
+                     ((v₁₃ : r₁₃.A) → 
+                       r₁₃.A))) 
+           struct{}) ((r₁₄ : sig{}) → 
+                     ((v₁₄ : Set) → 
+                       Set)))
+
+†(_3← (\(r₁₈ : _1) → (\(v₁₈ : _2) → v₁₈)))
+
+
+EQ (((<Eq>) struct{A := ((r₁₉ : sig{}) → ((v₁₉ : Set) → ((r₂₀ : sig{}) → ((v₂₀ : Set) → Set))))}) 
+            (\(r₂₁ : sig{}) → (\(v₂₁ : Set) → (\(r₂₂ : sig{}) → (\(v₂₂ : Set) → v₂₁))))
+  = ((<Eq>) struct{A := ((r₁₆ : sig{}) → ((v₁₆ : Set) → ((r₁₇ : sig{}) → ((v₁₇ : Set) → Set))))}) 
+            _0)
+
+†(_4← ((<eq>) struct{B := ((r₁₉ : sig{}) → 
+                          ((v₁₉ : Set) → 
+                          ((r₂₀ : sig{}) → 
+                          ((v₂₀ : Set) → 
+                            Set))))}) 
+              (\(r₂₁ : sig{}) → 
+              (\(v₂₁ : Set) → 
+              (\(r₂₂ : sig{}) → 
+              (\(v₂₂ : Set) → 
+                 v₂₁)))))
+
+
+== Solution == 
+
+_0 <- (\(r₂₁ : sig{}) → 
+      (\(v₂₁ : Set) → 
+      (\(r₂₂ : sig{}) → 
+      (\(v₂₂ : Set) → 
+         v₂₁)))
+_1 <- sig{A : Set}
+_2 <- r₁₈.A
+_3 <-(\(r₁₈ : sig{A : Set}) → 
+     (\(v₁₈ : r₁₈.A) → 
+        v₁₈))
+_4 <- ((<eq>) struct{B := ((r₁₉ : sig{}) → 
+                          ((v₁₉ : Set) → 
+                          ((r₂₀ : sig{}) → 
+                          ((v₂₀ : Set) → 
+                            Set))))}) 
+              (\(r₂₁ : sig{}) → 
+              (\(v₂₁ : Set) → 
+              (\(r₂₂ : sig{}) → 
+              (\(v₂₂ : Set) → 
+                 v₂₁)))))
+
+Type checked term:
+((((<f>) struct{b := (\(r₂₁ : sig{}) → 
+                     (\(v₂₁ : Set) → 
+                     (\(r₂₂ : sig{}) → 
+                     (\(v₂₂ : Set) → 
+                        v₂₁)))}) 
+         (\(r₁₈ : sig{A : Set}) → 
+         (\(v₁₈ : r₁₈.A) → 
+            v₁₈))) 
+         struct{}) 
+         ((<eq>) struct{B := ((r₁₉ : sig{}) → 
+                             ((v₁₉ : Set) → 
+                             ((r₂₀ : sig{}) → 
+                             ((v₂₀ : Set) → 
+                               Set))))}) 
+                 (\(r₂₁ : sig{}) → 
+                 (\(v₂₁ : Set) → 
+                 (\(r₂₂ : sig{}) → 
+                 (\(v₂₂ : Set) → 
+                    v₂₁)))))
+

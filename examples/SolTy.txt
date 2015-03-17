@@ -1,0 +1,198 @@
+-- surface postulates
+f : {T: (£:Set) → Set} (£:{b:Set} (£:T  (b)) → T  (Set)) → Set
+
+ == Postulates == 
+f : ((r₁ : sig{T : ((r₀ : sig{}) → 
+                   ((v₀ : Set) → 
+                     Set))}) → 
+    ((v₁ : ((r₂ : sig{b : Set}) → 
+           ((v₂ : ((r₁.T) struct{}) r₂.b) → 
+             ((r₁.T) struct{}) Set))) → 
+      Set))
+
+
+-- surface type
+{T: (£:Set) → Set} (£:{b:Set} (£:T  (b)) → T  (Set)) → Set
+
+ == Elab type == 
+((r₄ : sig{T : ((r₃ : sig{}) → 
+               ((v₃ : Set) → 
+                 Set))}) → 
+((v₄ : ((r₅ : sig{b : Set}) → 
+       ((v₅ : ((r₄.T) struct{}) r₅.b) → 
+         ((r₄.T) struct{}) Set))) → 
+  Set))
+
+
+
+--------------------------------
+works:
+
+-- surface term
+<f>
+
+
+ == Elab term == 
+<f>
+
+Number of metas: 0
+Number of constraints: 0
+
+
+
+
+----------------------------------
+fails:
+
+-- surface term
+(\ g → <f>  (g))
+
+ == Elab term == 
+(\(r₆ : sig{T : ((r₃ : sig{}) → 
+                ((v₃ : Set) → Set))}) → 
+(\(v₆ : ((r₅ : sig{b : Set}) → 
+        ((v₅ : ((r₆.T) struct{}) r₅.b) → 
+          ((r₆.T) struct{}) Set))) →
+  ((<f>) struct{T := _0}) _1))
+
+Number of metas: 2
+Number of constraints: 1
+
+== Metavariables ==
+
+(_0 : ((r₀ : sig{}) → 
+      ((v₀ : Set) → 
+        Set)))
+(_1 : ((r₂ : sig{b : Set}) → 
+      ((v₂ : ((_0) struct{}) r₂.b) → 
+        ((_0) struct{}) Set)))
+
+All metas with context
+	Γ = [r₆ : sig{T : ((r₃ : sig{}) → 
+	                  ((v₃ : Set) → 
+	                    Set))}
+	    ,v₆ : ((r₅ : sig{b : Set}) → 
+	          ((v₅ : ((r₆.T) struct{}) r₅.b) → 
+	            ((r₆.T) struct{}) Set))]
+
+== Constraints == 
+
+EQ (((r₅ : sig{b : Set}) → ((v₅ : ((r₆.T) struct{}) r₅.b) → ((r₆.T) struct{}) Set))
+  = ((r₂ : sig{b : Set}) → ((v₂ : ((_0  ) struct{}) r₂.b) → ((_0  ) struct{}) Set)))
+
+†(_1← v₆)
+
+
+== Solution == 
+
+_0 <- r₆.T
+_1 <- v₆
+
+Type checked term:
+(\(r₆ : sig{T : ((r₃ : sig{}) → 
+                ((v₃ : Set) → 
+                  Set))}) → 
+(\(v₆ : ((r₅ : sig{b : Set}) → 
+        ((v₅ : ((r₆.T) struct{}) r₅.b) → 
+          ((r₆.T) struct{}) Set))) →
+  ((<f>) struct{T := r₆.T}) v₆))
+
+
+
+
+
+----------------------------------
+hacks:
+
+-- surface term
+(\ g → <f>  ((\{b} t → g {b} (t))))
+
+
+ == Elab term == 
+(\(r₆ : sig{T : ((r₃ : sig{}) → 
+                ((v₃ : Set) → 
+                  Set))}) → 
+(\(v₆ : ((r₅ : sig{b : Set}) → 
+        ((v₅ : ((r₆.T) struct{}) r₅.b) → 
+          ((r₆.T) struct{}) Set))) → 
+   ((<f>) struct{T := _0}) (\(r₇ : sig{b : Set}) → 
+                           (\(v₇ : ((_0) struct{}) r₇.b) → 
+                              _2))))
+
+
+== Metavariables ==
+
+(_0 : ((r₀ : sig{}) → ((v₀ : Set) → Set)))
+(_1 : ((r₆.T) struct{}) r₇.b)
+(_2 : ((_0) struct{}) Set)
+
+All metas with context
+	Γ = [r₆ : sig{T : ((r₃ : sig{}) → 
+	                  ((v₃ : Set) → 
+	                    Set))}
+	    ,v₆ : ((r₅ : sig{b : Set}) → 
+	          ((v₅ : ((r₆.T) struct{}) r₅.b) → 
+	            ((r₆.T) struct{}) Set))]
+
+_1 and _2 also extended with
+	Γ = [r₇ : sig{b : Set}
+	    ,v₇ : ((_0) struct{}) r₇.b]
+
+Number of metas: 3
+Number of constraints: 2
+
+== Constraints == 
+
+EQ (((_0  ) struct{}) r₇.b
+  = ((r₆.T) struct{}) r₇.b)
+
+†(_1← v₇)
+
+
+EQ (((r₆.T) struct{}) Set
+  = ((_0  ) struct{}) Set)
+
+†(_2← ((v₆) struct{b := r₇.b}) _1)
+
+
+== Constraints == 
+
+_0 <- r₆.T
+_1 <- v₇
+_2 <- ((v₆) struct{b := r₇.b}) v₇
+
+Type checked term:
+(\(r₆ : sig{T : ((r₃ : sig{}) → 
+                ((v₃ : Set) → 
+                  Set))}) → 
+(\(v₆ : ((r₅ : sig{b : Set}) → 
+        ((v₅ : ((r₆.T) struct{}) r₅.b) → 
+          ((r₆.T) struct{}) Set))) → 
+   ((<f>) struct{T := r₆.T}) (\(r₇ : sig{b : Set}) → 
+                             (\(v₇ : ((r₆.T) struct{}) r₇.b) → 
+                                ((v₆) struct{b := r₇.b}) v₇))))
+
+
+
+
+
+
+----------------------------------
+hackz:
+
+-- surface term
+(\{T} g → <f> {T} (g))
+
+ == Elab term == 
+(\(r₆ : sig{T : ((r₃ : sig{}) → 
+                ((v₃ : Set) → 
+                  Set))}) → 
+(\(v₆ : ((r₅ : sig{b : Set}) → 
+        ((v₅ : ((r₆.T) struct{}) r₅.b) → 
+          ((r₆.T) struct{}) Set))) → 
+   ((<f>) struct{T := r₆.T}) v₆))
+
+Number of metas: 0
+Number of constraints: 0
+
+

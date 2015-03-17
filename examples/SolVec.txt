@@ -1,0 +1,319 @@
+-- surface postulates
+Nat : Set
+zero : <Nat>
+suc :  (£:<Nat>) → <Nat>
+Vec :  (£:Set) →  (£:<Nat>) → Set
+vnil :  (A:Set) → <Vec>  (A)  (<zero>)
+vcons : {A:Set}{n:<Nat>} (£:A) →  (£:<Vec>  (A)  (n)) → <Vec>  (A)  (<suc>  (n))
+vflip : {A:Set} (£:A) → {n:<Nat>} (£:<Vec>  (A)  (n)) → <Vec>  (A)  (<suc>  (n))
+
+
+ == Postulates == 
+Nat : Set
+zero : <Nat>
+suc : ((r₀ : sig{}) → 
+      ((v₀ : <Nat>) → 
+        <Nat>))
+Vec : ((r₁ : sig{}) → 
+      ((v₁ : Set) → 
+      ((r₂ : sig{}) → 
+      ((v₂ : <Nat>) → 
+        Set))))
+vnil : ((r₃ : sig{}) → 
+       ((v₃ : Set) → 
+        ((((<Vec>) struct{}) v₃) struct{}) <zero>))
+vcons : ((r₄ : sig{A : Set,n : <Nat>}) → 
+        ((v₄ : r₄.A) → 
+        ((r₅ : sig{}) → 
+        ((v₅ : ((((<Vec>) struct{}) r₄.A) struct{}) r₄.n) → 
+          ((((<Vec>) struct{}) r₄.A) struct{}) ((<suc>) struct{}) r₄.n))))
+vflip : ((r₆ : sig{A : Set}) → 
+        ((v₆ : r₆.A) → 
+        ((r₇ : sig{n : <Nat>}) → 
+        ((v₇ : ((((<Vec>) struct{}) r₆.A) struct{}) r₇.n) → 
+          ((((<Vec>) struct{}) r₆.A) struct{}) ((<suc>) struct{}) r₇.n))))
+
+
+--------------------------------
+works:
+
+-- surface type
+{A:Set} (£:A) → {n:<Nat>} (£:<Vec>  (A)  (n)) → <Vec>  (A)  (<suc>  (n))
+-- surface term
+(\ a → (\ v → <vcons>  (a)  (v)))
+
+ == Elab type == 
+ ((r₈ : sig{A : Set}) → 
+ ((v₈ : r₈.A) → 
+ ((r₉ : sig{n : <Nat>}) → 
+ ((v₉ : ((((<Vec>) struct{}) r₈.A) struct{}) r₉.n) → 
+  ((((<Vec>) struct{}) r₈.A) struct{}) ((<suc>) struct{}) r₉.n))))
+
+ == Elab term == 
+(\(r₁₀ : sig{A : Set}) → 
+(\(v₁₀ : r₁₀.A) → 
+(\(r₁₁ : sig{n : <Nat>}) → 
+(\(v₁₁ : ((((<Vec>) struct{}) r₁₀.A) struct{}) r₁₁.n) → 
+  _4))))
+
+
+Number of metas: 5
+Number of constraints: 3
+
+== Metavariables ==
+
+(_0 : Set)
+(_1 : <Nat>)
+(_2 : _0)
+(_3 : ((((<Vec>) struct{}) _0) struct{}) _1)
+(_4 : ((((<Vec>) struct{}) r₁₀.A) struct{}) ((<suc>) struct{}) r₁₁.n)
+
+All metas with context
+	Γ = [r₁₀ : sig{A : Set}
+	    ,v₁₀ : r₁₀.A
+	    ,r₁₁ : sig{n : <Nat>}
+	    ,v₁₁ : ((((<Vec>) struct{}) r₁₀.A) struct{}) r₁₁.n
+	    ]
+
+
+== Constraints == 
+
+EQ (r₁₀.A
+  = _0   )
+
+†(_2← v₁₀)
+
+
+EQ (((((<Vec>) struct{}) r₁₀.A) struct{}) r₁₁.n
+  = ((((<Vec>) struct{}) _0   ) struct{}) _1   )
+
+†(_3← v₁₁)
+
+
+EQ (((((<Vec>) struct{}) _0   ) struct{}) ((<suc>) struct{}) _1
+  = ((((<Vec>) struct{}) r₁₀.A) struct{}) ((<suc>) struct{}) r₁₁.n)
+
+†(_4← ((((<vcons>) struct{A := _0,n := _1}) _2) struct{}) _3)
+
+
+== Solution == 
+
+_0 <- r₁₀.A
+_1 <- r₁₁.n
+_2 <- v₁₀
+_3 <- v₁₁
+_4 <- ((((<vcons>) struct{A := r₁₀.A,n := r₁₁.n}) v₁₀) struct{}) v₁₁
+
+Type checked term:
+(\(r₈ : sig{A : Set}) → 
+(\(v₈ : r₆.A) → 
+(\(r₉ : sig{n : <Nat>}) → 
+(\(v₉ : ((((<Vec>) struct{}) r₆.A) struct{}) r₇.n) → 
+  ((((<vcons>) struct{A := r₁₀.A,n := r₁₁.n}) v₁₀) struct{}) v₁₁))))
+
+
+
+
+
+
+-----------------------------
+fails:
+
+-- surface type
+{A:Set} (£:A) → {n:<Nat>} (£:<Vec>  (A)  (n)) → <Vec>  (A)  (<suc>  (n))
+-- surface term
+(\ a → <vcons>  (a))
+
+ == Elab type == 
+((r₈ : sig{A : Set}) → 
+((v₈ : r₈.A) → 
+((r₉ : sig{n : <Nat>}) → 
+((v₉ : ((((<Vec>) struct{}) r₈.A) struct{}) r₉.n) → 
+  ((((<Vec>) struct{}) r₈.A) struct{}) ((<suc>) struct{}) r₉.n))))
+
+ == Elab term == 
+(\(r₁₀ : sig{A : Set}) → (\(v₁₀ : r₁₀.A) → _3))
+
+
+Number of metas: 4
+Number of constraints: 2
+
+== Metavariables ==
+
+(_0 : Set)
+(_1 : <Nat>)
+(_2 : _0)
+(_3 : ((r₉ : sig{n : <Nat>}) → 
+      ((v₉ : ((((<Vec>) struct{}) r₁₀.A) struct{}) r₉.n) → 
+        ((((<Vec>) struct{}) r₁₀.A) struct{}) ((<suc>) struct{}) r₉.n)))
+
+All metas with context
+	Γ = [r₁₀ : sig{A : Set}
+	    ,v₁₀ : r₁₀.A
+	    ]
+
+== Constraints == 
+
+EQ (r₁₀.A 
+  = _0   )
+
+†(_2← v₁₀)
+
+
+EQ (((r₅ : sig{}         ) → ((v₅ : ((((<Vec>) struct{}) _0   ) struct{}) _1  )
+      → ((((<Vec>) struct{}) _0   ) struct{}) ((<suc>) struct{}) _1  ))
+  = ((r₉ : sig{n : <Nat>}) → ((v₉ : ((((<Vec>) struct{}) r₁₀.A) struct{}) r₉.n)
+      → ((((<Vec>) struct{}) r₁₀.A) struct{}) ((<suc>) struct{}) r₉.n)))
+
+†(_3← ((<vcons>) struct{A := _0,n := _1}) _2)
+
+
+== Solution == 
+
+_0 <- r₁₀.A
+_2 <- v₁₀
+FAIL! (sig{} != sig{n : <Nat>})
+
+
+
+
+
+
+---------------------------------------
+flips:
+
+-- surface type
+{A:Set}{n:<Nat>} (£:A) →  (£:<Vec>  (A)  (n)) → <Vec>  (A)  (<suc>  (n))
+-- surface term
+(\ a → (\ v → <vflip>  (a)  (v)))
+
+== Elab type == 
+((r₈ : sig{A : Set,n : <Nat>}) → 
+((v₈ : r₈.A) → ((r₉ : sig{}) → 
+((v₉ : ((((<Vec>) struct{}) r₈.A) struct{}) r₈.n) → 
+  ((((<Vec>) struct{}) r₈.A) struct{}) ((<suc>) struct{}) r₈.n))))
+
+ == Elab term == 
+(\(r₁₀ : sig{A : Set,n : <Nat>}) → 
+(\(v₁₀ : r₁₀.A) → 
+(\(r₁₁ : sig{}) → 
+(\(v₁₁ : ((((<Vec>) struct{}) r₁₀.A) struct{}) r₁₀.n) → 
+  _4))))
+
+
+Number of metas: 5
+Number of constraints: 3
+
+== Metavariables ==
+
+(_0 : Set)
+(_1 : _0)
+(_2 : <Nat>)
+(_3 : ((((<Vec>) struct{}) _0) struct{}) _2)
+(_4 : ((((<Vec>) struct{}) r₈.A) struct{}) ((<suc>) struct{}) r₈.n)
+
+All metas with context
+	Γ = [v₁₀ : r₈.A
+	    ,r₁₀ : sig{A : Set,n : <Nat>}
+	    ,v₁₁ : ((((<Vec>) struct{}) r₈.A) struct{}) r₈.n
+	    ,r₁₁ : sig{}
+	    ]
+
+== Constraints == 
+
+EQ (r₁₀.A
+  = _0   )
+
+†(_1← v₁₀)
+
+
+EQ (((((<Vec>) struct{}) r₁₀.A) struct{}) r₁₀.n
+  = ((((<Vec>) struct{}) _0   ) struct{}) _2   )
+
+†(_3← v₁₁)
+
+
+EQ (((((<Vec>) struct{}) _0   ) struct{}) ((<suc>) struct{}) _2
+  = ((((<Vec>) struct{}) r₁₀.A) struct{}) ((<suc>) struct{}) r₁₀.n)
+
+†(_4← ((((<vflip>) struct{A := _0}) _1) struct{n := _2}) _3)
+
+
+== Solution == 
+
+_0 <- r₁₀.A
+_1 <- v₁₀
+_2 <- r₁₀.n
+_3 <- v₁₁
+_4 <- ((((<vflip>) struct{A := r₁₀.A}) v₁₀) struct{n := r₁₀.n}) v₁₁
+
+Type checked term:
+(\(r₁₀ : sig{A : Set,n : <Nat>}) → 
+(\(v₁₀ : r₁₀.A) → 
+(\(r₁₁ : sig{}) → 
+(\(v₁₁ : ((((<Vec>) struct{}) r₁₀.A) struct{}) r₁₀.n) → 
+  ((((<vflip>) struct{A := r₁₀.A}) v₁₀) struct{n := r₁₀.n}) v₁₁
+
+
+
+
+
+
+
+---------------------------------------
+flops:
+
+-- surface type
+{A:Set}{n:<Nat>} (£:A) →  (£:<Vec>  (A)  (n)) → <Vec>  (A)  (<suc>  (n))
+-- surface term
+(\ a → <vflip>  (a))
+
+ == Elab type == 
+((r₈ : sig{A : Set,n : <Nat>}) → 
+((v₈ : r₈.A) → ((r₉ : sig{}) → 
+((v₉ : ((((<Vec>) struct{}) r₈.A) struct{}) r₈.n) → 
+  ((((<Vec>) struct{}) r₈.A) struct{}) ((<suc>) struct{}) r₈.n))))
+  
+ == Elab term == 
+(\(r₁₀ : sig{A : Set,n : <Nat>}) → 
+(\(v₁₀ : r₁₀.A) → 
+  _2))
+
+
+Number of metas: 3
+Number of constraints: 2
+
+== Metavariables ==
+
+(_0 : Set)
+(_1 : _0)
+(_2 : ((r₉ : sig{}) → 
+      ((v₉ : ((((<Vec>) struct{}) r₁₀.A) struct{}) r₁₀.n) → 
+        ((((<Vec>) struct{}) r₁₀.A) struct{}) ((<suc>) struct{}) r₁₀.n)))
+
+All metas with context
+	Γ = [r₁₀ : sig{A : Set,n : <Nat>}
+	    ,v₁₀ : r₁₀.A]
+
+== Constraints == 
+
+EQ (r₁₀.A
+  = _0   )
+
+†(_1← v₁₀)
+
+
+EQ (((r₇ : sig{n : <Nat>}) → ((v₇ : ((((<Vec>) struct{}) _0   ) struct{}) r₇.n )
+      → ((((<Vec>) struct{}) _0   ) struct{}) ((<suc>) struct{}) r₇.n ))
+  = ((r₉ : sig{}         ) → ((v₉ : ((((<Vec>) struct{}) r₁₀.A) struct{}) r₁₀.n)
+      → ((((<Vec>) struct{}) r₁₀.A) struct{}) ((<suc>) struct{}) r₁₀.n)))
+
+†(_2← ((<vflip>) struct{A := _0}) _1)
+
+
+== Solution == 
+
+_0 <- r₁₀.A
+_1 <- v₁₀
+FAIL! (sig{n : <Nat>} != sig{})
+
