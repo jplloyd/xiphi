@@ -106,6 +106,7 @@ check e _T = case (e,_T) of
     say "Special struct check"
     assn <- phiExp phiS fT
     return (IStruct assn)
+  (CWld,_) -> freshMeta _T
   _ -> sayRule CheckGen >> do
     (_U,u) <- infer e
     genEq u _U _T
@@ -223,10 +224,9 @@ phiExp _as (IBind f _T : bs) = go _as
               then match e
               else nomatch assn
           where match e = do
-                  (_T',t) <- infer e
-                  t' <- genEq t _T' _T
+                  t <- e ⇇ _T
                   assn' <- phiExp ass bs
-                  return (Ass f t' : assn')
+                  return (Ass f t : assn')
         nomatch assn = do
                 t <- freshMeta _T
                 assn' <- phiExp assn bs

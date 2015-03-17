@@ -17,12 +17,16 @@ postulate =
 -- Type checking problems
 simple = ChkProb postulate SSet SSet
 works = chkTy cf
-fails = chkTy $ lamgappf vg
-hacks = chkTy $ lamgappf (SLam [_b] _t $ SApp vg [SPos vb] vt)
-hackz = chkTy $ SLam [_T] _g $ SApp cf [SPos vT] vg
+fails = chkTy $ lamg []   []          vg
+failz = chkTy $ lamg [_T] []          (lambt [])
+failc = chkTy $ lamg [_T] [SPos SWld] (lambt [SPos SWld])
+hacks = chkTy $ lamg []   []          (lambt [SPos vb])
+hackz = chkTy $ lamg [_T] [SPos vT]   vg
 -- where
 chkTy e = ChkProb postulate e eTy
-lamgappf = elam1 _g . eapp1 cf
+lamg = lam _g cf
+lambt args = lam _t vg [_b] args vt
+lam bind fun implbinds implargs = SLam implbinds bind . SApp fun implargs
 
 
 -- Identifiers
