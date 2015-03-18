@@ -1,21 +1,41 @@
 module ALam where
 
-Bool = (_ : Set1) -> ((_ : Set1) -> Set1)
-
-true : Bool
-true = λ x y → x
-
-poly = {A : Set} (_ : A) → A
-mono = (_ : Set) → Set
-
+-- Type and value constructors for equivalence classes
 postulate
-  Eq : {A : Set2} (_ : A) → Set2
-  eq : {B : Set2} (a : B) → (Eq {B} a)
-  w : {b : Bool} (_ : Eq b) → ((_ : b poly mono) → Set)
-  f : {b : Bool} (_ : b poly mono) → ((_ : Eq b) → Set)
+  Eq : Set1 → Set1
+  eq : (T : Set1) → Eq T
 
+  w : {T : Set1} → Eq T → T    → Set
+  f : {T : Set1} → T    → Eq T → Set
+
+-- Type of polymorphic identity function in Set1
+Id : Set1
+Id = {A : Set} → A → A
+
+-- Works because (λ x -> x) is made polymorphic using information from (eq Id)
 works : Set
-works = w (eq {Bool} true) (λ z → z)
+works = w (eq Id) (λ x -> x)
 
---fails : Set
---fails = f (λ z → z) (eq {Bool} true)
+-- Fails because the (λ x -> x) cannot be made polymorphic after the fact
+-- fails : Set
+-- fails = f (λ x -> x) (eq Id)
+
+
+
+
+-- An additional observation:
+
+-- Polymorphic identity function
+id : {A : Set} → A → A
+id = λ {A : Set} (a : A) → a
+
+-- Works since 
+ws : Set
+--ws = w (eq Id) id
+ws = w (eq Id) (id {_})
+
+-- Interestingly, fs fails because of a different, but possibly related issue,
+-- namely that a meta is unnecessarily inserted for the implicit argument of id.
+-- fs : Set
+-- fs = f  id      (eq Id)
+-- fs = f (id {_}) (eq Id)

@@ -16,13 +16,17 @@ postulate
   vflip : flipvconstype
 
 works : flipvconstype
-works = \a v -> vcons a v
+works = \    a     v -> vcons         a v
+--works = \{A} a {n} v -> vcons {_} {_} a v
 
 fails : flipvconstype
-fails = \a -> vcons a
+fails = \    a     -> vcons         a
+--fails = \{A} a {n} -> vcons {_} {_} a
 
 flips : origvconstype
-flips = \a v -> vflip a v
+flips = \        a v -> vflip     a     v
+--flips = \{A} {n} a v -> vflip {_} a {_} v
 
 flops : origvconstype
-flops = \a -> vflip a
+flops = \        a -> vflip     a
+--flops = \{A} {n} a -> vflip {_} a {_}
