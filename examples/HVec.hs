@@ -4,8 +4,9 @@ import Surface
 import CheckHub
 
 -- Named expressions
-origvconstype = SFun [bASet, bnNat] dA (SFun []      dVAn veccod)
-flipvconstype = SFun [bASet]        dA (SFun [bnNat] dVAn veccod)
+vconsT = SFun [bASet, bnNat] dA (SFun []      dVAn veccod)
+vflipT = SFun [bnNat, bASet] dA (SFun []      dVAn veccod)
+vskipT = SFun [bASet]        dA (SFun [bnNat] dVAn veccod)
 
 -- where
 veccod = eapp2 cVec vA (eapp1 csuc vn)
@@ -19,26 +20,40 @@ postulate =
   ,(_Vec, fun dSet (fun dNat SSet))
   ,(_vnil, fun bASet (eapp2 cVec vA czero))
 
-  ,(_vcons, origvconstype)
-  ,(_vflip, flipvconstype)
+  ,(_vcons, vconsT)
+  ,(_vflip, vflipT)
+  ,(_vskip, vskipT)
   ]
 
 -- Type checking problems
 simple n = ChkProb (take n postulate) (SCns _Nat) SSet
--- Synonym using all arguments still works. Good or bad, who can tell?
-works = chkFlip twoArgs
--- Only using the one is doomed to fail.
-fails = chkFlip oneArgs
--- Flips
-flips = chkOrig twoArgs
--- Flops
-flops = chkOrig oneArgs
+
+-- Works
+flips = chkflip args1
+flops = chkflop args1
+
+skips = chkskip args2
+skops = chkskop args2
+
+-- Fails
+flipz = chkflip args0
+flopz = chkflop args0
+
+skipz = chkskip args1
+skopz = chkskop args1
+
 -- where
-chkFlip f = chk (f cvcons) flipvconstype
-chkOrig f = chk (f cvflip) origvconstype
-twoArgs cv = elam2 _a _v $ eapp2 cv va vv
-oneArgs cv = elam1 _a    $ eapp1 cv va
-chk exp typ = ChkProb postulate exp typ
+chkflip = chk cvcons vflipT
+chkflop = chk cvflip vconsT
+
+chkskip = chk cvcons vskipT
+chkskop = chk cvskip vconsT
+
+args2 cv = elam2 _a _v $ eapp2 cv va vv
+args1 cv = elam1 _a    $ eapp1 cv va
+args0 cv =                     cv
+
+chk exp typ f = ChkProb postulate (f exp) typ
 
 -- Identifiers
 _Nat   = "Nat"
@@ -48,6 +63,7 @@ _Vec   = "Vec"
 _vnil  = "vnil"
 _vcons = "vcons"
 _vflip = "vflip"
+_vskip = "vskip"
 _A = "A"
 _n = "n"
 _a = "a"
@@ -61,6 +77,7 @@ cVec   = SCns _Vec
 cvnil  = SCns _vnil
 cvcons = SCns _vcons
 cvflip = SCns _vflip
+cvskip = SCns _vskip
 
 -- Variables
 vA = SVar _A

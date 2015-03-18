@@ -1,0 +1,36 @@
+fails:
+
+
+(\(r₆ : sig{T : ((r₃ : sig{}) → ((v₃ : Set) → Set))}) → 
+(\(v₆ : ((r₅ : sig{b : Set}) → ((v₅ : ((r₆.T) struct{}) r₅.b) → Set))) → 
+((<f>) struct{T := _0}) _1))
+
+
+
+EQ (((r₅ : sig{b : Set}) → ((v₅ : ((r₆.T) struct{}) r₅.b) → Set))
+  = ((r₂ : sig{b : Set}) → ((v₂ : ((_0  ) struct{}) r₂.b) → Set)))
+  
+  †(_1← v₆)
+
+_0 <- r₆.T
+
+
+
+
+------------------
+failz:
+
+EQ (((_0  ) struct{}) r₇.b
+  = ((r₆.T) struct{}) _1  )
+  
+  †(_2← v₇)
+
+
+--------------------
+failc:
+
+EQ (((_0  ) struct{}) r₇.b
+  = ((r₆.T) struct{}) _1  )
+  
+  †(_2← v₇)
+

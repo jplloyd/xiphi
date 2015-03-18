@@ -1,0 +1,46 @@
+flipz:
+
+EQ (((r₄  : sig{A : Set,n : <Nat>}) → ((v₄  : r₄.A ) → ((r₅  : sig{}) → ((v₅  : ((((<Vec>) struct{}) r₄.A ) struct{}) r₄.n ) → 
+          ((((<Vec>) struct{}) r₄.A ) struct{}) ((<suc>) struct{}) r₄.n ))))
+  = ((r₁₀ : sig{n : <Nat>,A : Set}) → ((v₁₀ : r₁₀.A) → ((r₁₁ : sig{}) → ((v₁₁ : ((((<Vec>) struct{}) r₁₀.A) struct{}) r₁₀.n) → 
+          ((((<Vec>) struct{}) r₁₀.A) struct{}) ((<suc>) struct{}) r₁₀.n)))))
+        
+        †(_0← <vcons>)
+
+
+------------------------
+flopz:
+
+EQ (((r₆  : sig{n : <Nat>,A : Set}) → ((v₆  : r₆.A ) → ((r₇  : sig{}) → ((v₇  : ((((<Vec>) struct{}) r₆.A ) struct{}) r₆.n ) → 
+          ((((<Vec>) struct{}) r₆.A ) struct{}) ((<suc>) struct{}) r₆.n ))))
+  = ((r₁₀ : sig{A : Set,n : <Nat>}) → ((v₁₀ : r₁₀.A) → ((r₁₁ : sig{}) → ((v₁₁ : ((((<Vec>) struct{}) r₁₀.A) struct{}) r₁₀.n) → 
+          ((((<Vec>) struct{}) r₁₀.A) struct{}) ((<suc>) struct{}) r₁₀.n)))))
+          
+          †(_0← <vflip>)
+
+
+------------------------
+skipz:
+
+EQ (r₁₂.A = _0)†(_2← v₁₂)
+
+
+EQ (((r₅  : sig{}         ) → ((v₅  : ((((<Vec>) struct{}) _0   ) struct{}) _1   ) → ((((<Vec>) struct{}) _0   ) struct{}) ((<suc>) struct{}) _1   ))
+  = ((r₁₁ : sig{n : <Nat>}) → ((v₁₁ : ((((<Vec>) struct{}) r₁₂.A) struct{}) r₁₁.n) → ((((<Vec>) struct{}) r₁₂.A) struct{}) ((<suc>) struct{}) r₁₁.n)))
+  
+  †(_3← ((<vcons>) struct{A := _0,n := _1}) _2)
+  
+  
+-----------------------
+skopz:
+
+EQ (r₁₂.A = _0)†(_1← v₁₂)
+
+
+EQ (((r₉  : sig{n : <Nat>}) → ((v₉  : ((((<Vec>) struct{}) _0   ) struct{}) r₉.n ) → ((((<Vec>) struct{}) _0   ) struct{}) ((<suc>) struct{}) r₉.n ))
+  = ((r₁₁ : sig{}         ) → ((v₁₁ : ((((<Vec>) struct{}) r₁₂.A) struct{}) r₁₂.n) → ((((<Vec>) struct{}) r₁₂.A) struct{}) ((<suc>) struct{}) r₁₂.n)))
+  
+  †(_2← ((<vskip>) struct{A := _0}) _1)
+
+
+
