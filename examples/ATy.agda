@@ -11,11 +11,14 @@ worksAgda = f
 solvableAgda : Ty
 solvableAgda = λ {T} -> f {_}
 
---failsAgda : Ty
---failsAgda = λ g -> f g
+-- Fails because g is unnecessarily elaborated into a lambda,
+-- due to "eager" hidden-lambda insertion,
+-- would be avoided by adopting "lazy" strategy.
+-- failsAgda : Ty
+-- failsAgda = λ g -> f g
 -- => elaborates to =>
---unsolvableAgda : Ty
---unsolvableAgda = λ {T} g -> f {_} (λ {A} -> g {_})
+-- unsolvableAgda : Ty
+-- unsolvableAgda = λ {T} g -> f {_} (λ {A} -> g {_})
 
 giveT : Ty
 giveT = λ {T} g -> f {T} (λ {A} -> g {_})

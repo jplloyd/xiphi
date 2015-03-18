@@ -39,3 +39,6 @@ ws = w (eq Id) (id {_})
 -- fs : Set
 -- fs = f  id      (eq Id)
 -- fs = f (id {_}) (eq Id)
+-- This indicates a discrepancy where hidden arguments are inserted more eagerly
+-- than hidden lambdas: fs type checks when the hidden lambda is inserted as well.
+-- fs = f (λ {_} -> id {_}) (eq Id)
