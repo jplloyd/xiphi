@@ -1,4 +1,4 @@
-module Vec where
+module HVec where
 
 import Surface
 import CheckHub

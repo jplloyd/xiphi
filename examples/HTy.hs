@@ -1,4 +1,4 @@
-module Ty where
+module HTy where
 
 import Surface
 import CheckHub
@@ -7,7 +7,7 @@ import CheckHub
 -- Named expressions
 eTy = SFun impl expl cod
   where impl = [bTSetSet]
-        expl = dummy $ SFun [bbSet] (dummy $ appT vb) (appT SSet)
+        expl = dummy $ SFun [bASet] (dummy $ appT vA) SSet
         cod  = SSet
 
 -- Postulates
@@ -16,38 +16,46 @@ postulate =
 
 -- Type checking problems
 simple = ChkProb postulate SSet SSet
+
 works = chkTy cf
-fails = chkTy $ lamg []   []          vg
-failz = chkTy $ lamg [_T] []          (lambt [])
-failc = chkTy $ lamg [_T] [SPos SWld] (lambt [SPos SWld])
-hacks = chkTy $ lamg []   []          (lambt [SPos vb])
-hackz = chkTy $ lamg [_T] [SPos vT]   vg
+solva = chkTy $ lamg []   []        vg
+unsol = chkTy $ lamg []   []        (lamta [] [])
+giveT = chkTy $ lamg [_T] [SPos vT] (lamta [] [])
+giveA = chkTy $ lamg []   []        (lamta [_A] [SPos vA])
+
+solva_ = chkTy $ lamgT [SPos SWld] vg
+unsol_ = chkTy $ lamgT [SPos SWld] (lamtaA [SPos SWld])
+giveT_ = chkTy $ lamgT [SPos vT]   (lamtaA [SPos SWld])
+giveA_ = chkTy $ lamgT [SPos SWld] (lamtaA [SPos vA])
+
 -- where
 chkTy e = ChkProb postulate e eTy
+lamgT  = lamg  [_T]
+lamtaA = lamta [_A]
 lamg = lam _g cf
-lambt args = lam _t vg [_b] args vt
-lam bind fun implbinds implargs = SLam implbinds bind . SApp fun implargs
+lamta impls args = lam _ta vg impls args vta
+lam bind fun impls args = SLam impls bind . SApp fun args
 
 
 -- Identifiers
-_T = "T"
-_b = "b"
-_f = "f"
-_g = "g"
-_t = "t"
+_T  = "T"
+_A  = "A"
+_f  = "f"
+_g  = "g"
+_ta = "ta"
 
 -- Constants
 cf = SCns _f
 
 -- Variables
-vT = SVar _T
-vb = SVar _b
-vg = SVar _g
-vt = SVar _t
+vT  = SVar _T
+vA  = SVar _A
+vg  = SVar _g
+vta = SVar _ta
 
 -- Bindings
 bTSetSet = SBind _T (fun dSet SSet)
-bbSet = SBind _b SSet
+bASet = SBind _A SSet
 
 -- Dummy bindings
 dSet = dummy SSet

@@ -1,4 +1,4 @@
-module Lam (works,fails) where
+module HLam (works,fails) where
 
 import Surface
 import CheckHub
