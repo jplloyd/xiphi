@@ -1,6 +1,7 @@
 module Types where
 
 import DList
+import LatexPrint
 
 import Control.Monad.Except
 import Control.Monad.Trans.Writer
@@ -39,10 +40,12 @@ refBinding = showRef
 
 showRef :: Ref -> String
 showRef (V c n) = toChar c:(map cUnd . show) n
-    where toChar b = case b of 
-                 VarBind -> 'v'
-                 RecBind -> 'r'
-                 Unknown -> 'u' 
+
+toChar :: RefType -> Char
+toChar b = case b of
+  VarBind -> 'v'
+  RecBind -> 'r'
+  Unknown -> 'u'
 
 -- Subscripted numerals
 cUnd :: Char -> Char
@@ -60,3 +63,9 @@ cUnd c = case c of
   _   -> error "Only numeric characters may be subscripted"
 
 -- ###########################################
+
+
+instance LatexPrintable Ref where
+  latexPrint r = case r of
+    V rt n -> ltx $ toChar rt : "_" ++ show n
+    F s -> ltx . mathit $ s

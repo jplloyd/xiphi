@@ -1,9 +1,14 @@
+{-# LANGUAGE RecordWildCards,  FlexibleInstances #-}
 -- | Surface grammar which enforces the existence of implicit constructs
 -- for every function type, lambda abstraction and application
 module Surface where
 
+
+import Data.List
+
 import Util 
 import Types
+import LatexPrint
 
 data SBind = SBind Name SExpr
 data SAssign = SPos SExpr | SNamed Name SExpr
@@ -77,3 +82,37 @@ pBind False (SBind n e) = par $ n ++ ":" ++ show e
 -- Print list of impl arguments (given)
 pAssgn :: [SAssign] -> String
 pAssgn = unwords  . map show
+
+-- Latex printing
+
+needPar :: SExpr -> Bool
+needPar e = case e of
+  SFun{..} -> True -- illegal, but not enforced
+  SApp{..} -> True
+  SLam{..} -> True -- also illegal b.n.e
+  _        -> False
+
+instance LatexPrintable SExpr where
+  latexPrint _e = case _e of
+    SSet -> ltx . mathit $ "Set"
+    SCns n -> ltx . mathit $ n
+    SVar n -> ltx . mathit $ n
+    SFun imp expl e -> lLift lBrace (lP imp) <©> lLift par (lP expl) <++> ltxArr <++> lP e
+    SApp e1 as e2 -> lP e1 <¢> lP as <¢> optMod needPar (lLift par) lP e2
+    SLam imps expl e -> ltx ("\\lambda " ++ lBrace (intercalate ", " imps) ++ " " ++ expl)
+                        <++> ltx " -> " <++> latexPrint e
+    SWld -> ltx "__"
+
+instance LatexPrintable SBind where
+  latexPrint (SBind n e) = lLift ((mathit n ++ " : ")++) (lP e)
+
+instance LatexPrintable [SBind]
+  where latexPrint sbs = foldr (<++>) (ltx "") (intersperse (ltx ", ") (map lP sbs))
+
+instance LatexPrintable SAssign where
+  latexPrint sa = case sa of
+    SPos e -> lP e
+    SNamed n e -> ltx (n ++ " := ") <++> lP e
+
+instance LatexPrintable [SAssign] where
+  latexPrint sbs = lLift lBrace $ foldr (<++>) (ltx "") (intersperse (ltx ", ") (map lP sbs))

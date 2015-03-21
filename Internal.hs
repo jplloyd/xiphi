@@ -1,4 +1,4 @@
-{-# LANGUAGE NoMonomorphismRestriction#-}
+{-# LANGUAGE NoMonomorphismRestriction, RecordWildCards#-}
 module Internal where
 
 -- import Data.Maybe
@@ -6,6 +6,7 @@ import Data.List
 import Data.Maybe
 import Util
 import Types
+import LatexPrint
 
 -- Synonyms for environments
 
@@ -94,10 +95,12 @@ showTerm _t = case _t of
 underset :: String -> String -> String
 underset v uset = v ++ "_{" ++ uset ++"}"
 
-
-mathit :: String -> String
-mathit s = "\\mathit{" ++ s ++ "}"
-
+needPar :: Term -> Bool
+needPar t = case t of
+  IFun{..} -> True
+  ILam{..} -> True
+  IApp{..} -> True
+  _        -> False
 
 -- These things have to be in math context in order to compile
 latexTerm :: Term -> String
@@ -105,7 +108,7 @@ latexTerm _t = case _t of
    ISet -> mathit "Set"
    ICns n -> mathit n
    IVar n -> latexRef n
-   IFun (n,t) t' -> (par $ (latexRef n) ++ ":" ++ latexTerm t) ++ " -> " ++ latexTerm t'
+   IFun (n,t) t' -> par $ (latexRef n) ++ ":" ++ latexTerm t ++ " -> " ++ latexTerm t'
    ILam (n,t) t' -> "\\lambda " ++ par (latexRef n ++ ":" ++ latexTerm t) ++ " -> " ++ par (latexTerm t')
    IApp t1 t2 -> (latexTerm t1) ++ "\\fsp" ++ par (latexTerm t2) -- this only needs to be parenthesized if it is an app I think
    ISig bs -> "\\sig{" ++ intercalate "," (map latexBs bs) ++ "}"
@@ -146,6 +149,9 @@ latexRef (V g idx) = flip underset (show idx) $ case g of
   VarBind -> "x"
   RecBind -> "r"
   Unknown -> "u" -- should not be part of output post-resolution
+
+instance LatexPrintable Term
+  where latexPrint = ltx . latexTerm
 
 -- end of latex printing
 

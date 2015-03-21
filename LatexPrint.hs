@@ -3,6 +3,9 @@ module LatexPrint where
 
 import Util
 
+import Data.List
+
+
 newtype Latex = Latex String
 
 instance Show Latex where
@@ -20,6 +23,13 @@ instance Show Latex where
          
 lLift :: (String -> String) -> Latex -> Latex
 lLift f (Latex s) = Latex (f s) 
+
+lPar = lLift par
+
+lxBrace = lLift lBrace
+
+lComma :: LatexPrintable a => [a] -> Latex
+lComma = foldr (<++>) (ltx "") . intersperse (ltx ", ") . map lP
 
 ltx :: String -> Latex
 ltx = Latex

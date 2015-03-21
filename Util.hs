@@ -20,6 +20,9 @@ angBr = surround leftAngBr rightAngBr
 brack :: String -> String
 brack = surround "[" "]"
 
+optMod :: (a -> Bool) -> (b -> b) -> (a -> b) -> a -> b
+optMod p f shw a = (if p a then f . shw else shw) a
+
 -- This operation is unsafe
 strip :: String -> String
 strip = init . tail

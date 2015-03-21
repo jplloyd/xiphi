@@ -1,8 +1,9 @@
-{-# LANGUAGE FlexibleInstances#-}
+{-# LANGUAGE FlexibleInstances, RecordWildCards #-}
 module Core where
 
 import Util
 import Types
+import LatexPrint
 import Data.List
 
 newtype FList = FL {getList :: [Field]}
@@ -64,8 +65,44 @@ instance Show CExpr where
     CProj e f -> show e ++"."++ f
     CWld -> "_"
 
+needPar :: CExpr -> Bool
+needPar e = case e of
+  CApp{..} -> True
+  CFun{..} -> True
+  CLam{..} -> True
+  _        -> False
+
 instance Show CSigma where
   show (CS ls) = show ls
 
 instance Show FList where
   show = concatMap (brace . show) . getList
+
+instance LatexPrintable CExpr where
+  latexPrint _e = case _e of
+       CCns n -> ltx . mathit $ n
+       CVar r -> lP r
+       CSet -> ltx . mathit $ "Set"
+       CFun cb e -> lP cb <++> ltxArr <++> lP e
+       CLam r fs v e -> ltx "\\lambda_e"
+                        <©> lPar (lP r <++> ltx " : " <++> lP fs)
+                        <©> lP v <++> ltxArr <++> lP e
+       CApp e1 e2 -> lP e1 <¢> optMod needPar lPar lP e2
+       CSig fbs -> lLift (surround "\\sig{" "}") (lComma fbs)
+       CEStr cas -> lLift (surround "\\estruct{" "}") $ lComma cas
+       CProj e f -> lP e <++> ltx ("."++mathit f)
+       CWld -> ltx "__"
+
+instance LatexPrintable CBind where
+  latexPrint (CBind r e) = lPar $ lP r <++> ltx " : " <++> lP e
+
+instance LatexPrintable FBind where
+  latexPrint (FBind f e) = ltx (mathit f) <++> ltx " : " <++> lP e
+
+instance LatexPrintable CAssign where
+  latexPrint ca = case ca of
+    CPos e -> lP e
+    CNamed f e -> ltx (f ++ " := ") <++> lP e
+
+instance LatexPrintable FList where
+  latexPrint (FL fs) = ltx . lBrace . intercalate ", " $ fs
