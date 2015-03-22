@@ -61,7 +61,6 @@ type TCM = ErrT (WriterT [Rule] (ReaderT TCEnv (State (RuleIdx,Xi))))
 --say :: String -> TCM ()
 --say s = lift $ tell (toDList (s ++ "\n"))
 
--- Logging deferring to descriptions from a data type
 sayRule :: Rule -> TCM ()
 sayRule r = lift (tell [r])
 
@@ -346,37 +345,40 @@ addC _C = do
 
 data Rule = Indexed Rule' RuleIdx
           | Unindexed Rule'
-          | InferOutput Type Term RuleIdx
-          | CheckingOutput Term RuleIdx
+          | Simple Rule'
+          | InferRes Type Term RuleIdx
+          | CheckRes Term RuleIdx
+
+data RuleType = Infer | Check
 
 -- Rules used in type checking - show instance will reference rules (eventually)
 data Rule' =
-   CheckGen -- Check/Eq stuff <
- | EqRedRefl --               <
- | EqRedGenC --               <
+   CheckGen -- eq:checkrule
+ | EqRedRefl -- eq:algeqrefl
+ | EqRedGenC -- eq:addceq
 -- ============================
- | InferSet -- Basics     <
- | InferCns CExpr Type Term -- <
- | InferVar CExpr Type Term -- <
- | InferWld Type Term -- <
- | InferFun --        <
- | InferRecB --       <
- | InferRecC --       <
+ | InferSet -- eq:infset
+ | InferCns -- eq:infc
+ | InferVar -- eq:infv
+ | InferWld -- eq:infunderscore
+ | InferFun -- eq:inffuntyp
+ | InferRecB -- eq:infrectypbas
+ | InferRecC -- eq:infrectyprec
 -- ====================
- | InferApp -- Applications <
- | AppKnown --              <
- | AppUnknown --            <
+ | InferApp -- eq:infapp
+ | AppKnown -- eq:appknown
+ | AppUnknown -- eq:appunknown
 -- ==========================
- | InferLam -- Lambdas      <
- | SubSeqGenC --            <
+ | InferLam -- eq:infexplambda
+ | SubSeqGenC -- eq:xiopssubs
 -- ==========================
- | InferEStr -- Exp. Struct <
- | InferPhiS --             <
- | ExpGenC --               <
+ | InferEStr -- eq:infexprec
+ | InferPhiS -- eq:infphi
+ | ExpGenC -- eq:xiopsstexp
 -- ==========================
- | InferProj -- Projections <
- | ProjRed --               <
- | ProjGenC --              <
+ | InferProj -- eq:infproj
+ | ProjRed -- eq:unifprojconstraint
+ | ProjGenC -- eq:xiopsproj
 -- ==========================
  | FreshMeta -- Xi Operations <
  | FreshMetas --              <
