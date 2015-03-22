@@ -1,10 +1,8 @@
-{-# LANGUAGE RecordWildCards #-}
 module LatexPrint where
 
 import Util
 
 import Data.List
-
 
 newtype Latex = Latex String
 
@@ -24,8 +22,10 @@ instance Show Latex where
 lLift :: (String -> String) -> Latex -> Latex
 lLift f (Latex s) = Latex (f s) 
 
+lPar :: Latex -> Latex
 lPar = lLift par
 
+lxBrace :: Latex -> Latex
 lxBrace = lLift lBrace
 
 lComma :: LatexPrintable a => [a] -> Latex

@@ -7,7 +7,6 @@
 -- is related.
 module Elaboration where
 
-import DList
 import Core as C
 import Internal hiding (addBind,addBinds)
 import qualified Internal as I
@@ -28,16 +27,16 @@ import Control.Monad.Trans.Writer
 -- the normalization stage that is substitution (internally)
 
 -- Elaborate - return log and term
-elaborate :: Sigma -> CExpr -> Type -> (Log, Either Error Term)
-elaborate sig e _T = swap $ evalState (elab_ sig e _T) emptyXi
+elaborate :: Sigma -> CExpr -> Type -> ([Rule], Either Error Term)
+elaborate sig e _T = swap $ evalState (elab_ sig e _T) (0,emptyXi)
 
 -- Elaborate - return log, final context and term
-elaborate' :: Sigma -> CExpr -> Type -> (Log, Xi, Either Error Term)
+elaborate' :: Sigma -> CExpr -> Type -> ([Rule], Xi, Either Error Term)
 elaborate' sig e _T = (eLog,xi,term)
-  where ((term,eLog),xi) = runState (elab_ sig e _T) emptyXi
+  where ((term,eLog),(_,xi)) = runState (elab_ sig e _T) (0,emptyXi)
 
 -- helper
-elab_ :: Sigma -> CExpr -> Type -> State Xi (Either Error Term, Log)
+elab_ :: Sigma -> CExpr -> Type -> State (Int,Xi) (Either Error Term, [Rule])
 elab_ sig e _T = runReaderT (runWriterT (runExceptT (check e _T))) (sig,Env [])
 
 
@@ -50,21 +49,28 @@ sigma = fst
 gamma :: TCEnv -> Gamma
 gamma = snd
 
--- Type checking monad - error handling, progress logging,
--- reader for constants and local variables, state for meta/constraint store
-type TCM = ErrT (LogT (ReaderT TCEnv (State Xi)))
+type RuleIdx = Int
 
+-- Type checking monad - error handling, progress logging,
+-- reader for constants and local variables, state for meta/constraint store and rule index
+type TCM = ErrT (WriterT [Rule] (ReaderT TCEnv (State (RuleIdx,Xi))))
 
 -- ##    Logging    ## -------------------------------------
 
 -- Simple logging - arbitrary strings
-say :: String -> TCM ()
-say s = lift $ tell (toDList (s ++ "\n"))
+--say :: String -> TCM ()
+--say s = lift $ tell (toDList (s ++ "\n"))
 
 -- Logging deferring to descriptions from a data type
 sayRule :: Rule -> TCM ()
-sayRule r = lift $ tell (toDList (show r ++ "\n"))
+sayRule r = lift (tell [r])
 
+sayRule' :: (RuleIdx -> Rule) -> TCM RuleIdx
+sayRule' f = do
+  idx <- fst <$> get
+  modify $ first (+1)
+  sayRule (f idx)
+  return idx
 
 -- ##  Context functions  ## -------------------------------
 
@@ -93,7 +99,7 @@ lookupGamma n = lookupE n . gamma <$> ask >>= \mt -> maybeErr mt id errMsg
 check :: CExpr -> Type -> TCM Term
 check e _T = case (e,_T) of
   (CLam r1 fs v1 e', IFun (r2,ISig fT) (IFun (v2,_U) _V)) -> do
-    say "Special lambda check"
+--    say "Special lambda check"
     sg <- subSD fs fT
     let sub _1 _2 = (Sub (IVar _1) _2 ®)
         _U' = sub r1 r2 _U
@@ -103,11 +109,12 @@ check e _T = case (e,_T) of
     et <- addBinds [bv,br] $ e' ⇇ _V'
     return(ILam br (ILam bv et))
   (CEStr phiS, ISig fT) -> do
-    say "Special struct check"
+--    say "Special struct check"
     assn <- phiExp phiS fT
     return (IStruct assn)
   (CWld,_) -> freshMeta _T
-  _ -> sayRule CheckGen >> do
+  _ -> do
+    sayRule (Unindexed CheckGen)
     (_U,u) <- infer e
     genEq u _U _T
 
@@ -118,38 +125,27 @@ check e _T = case (e,_T) of
 -- Equality will either resolve immediately through reflexivity - or generate an equality constraint
 -- even better would be to just check if they are wrong straight away (very much possible)
 genEq :: Term -> Type -> Type -> TCM Term
-genEq u _U _T | _T =$= _U = sayRule EqRedRefl >> return u
---              | _T =@= _U = say "Left meta assignment" >> addAss _T _U >> return u
---              | _U =@= _T = say "Right meta assignment" >> addAss _U _T >> return u
-              | otherwise = sayRule EqRedGenC >> do
-                  say $ "The types: " ++ showTerm _T ++ " and " ++ showTerm _U ++
-                    " are not equal, generating equality constraint."
+genEq u _U _T | _T =$= _U = sayRule (Unindexed EqRedRefl) >> return u
+              | otherwise = sayRule (Unindexed EqRedGenC) >> do
                   _Y <- freshMeta _T
                   addC (EquC _U _T _Y u)
                   return _Y
---  where addAss (IMeta m _) _U = addC (Assignment m _U)
-
-
---(=@=) :: Type -> Type -> Bool
---(IMeta (Meta _ _T g) []) =@= _U = _T == ISet && _U `inContext` g
---_                        =@= _  = False
-
 
 -- ##  Inference rules  ## ---------------------------------
 
  -- ElabM will now have a reader for constants and possibly for Gamma as well
 infer :: CExpr -> TCM (Type,Term)
 infer _e = case _e of
-  CCns n       -> sayRule InferCns >> infCons n
-  CVar r       -> sayRule InferVar >> infVar r
-  CSet         -> sayRule InferSet >> infSet
-  CFun b e     -> sayRule InferFun >> infFun b e
-  CLam r i e b -> sayRule InferLam >> infLam r i e b
-  CApp e1 e2   -> sayRule InferApp >> infApp e1 e2
+  CCns n       -> infCons n
+  CVar r       -> infVar r
+  CSet         -> infSet
+  CFun b e     -> infFun b e
+  CLam r i e b -> infLam r i e b
+  CApp e1 e2   -> infApp e1 e2
   CSig bsd     -> infSig bsd
-  CEStr n      -> sayRule InferEStr >> infEStr n
-  CProj e f    -> sayRule InferProj >> infProj e f
-  CWld         -> sayRule InferWld >> infWld
+  CEStr n      -> infEStr n
+  CProj e f    -> infProj e f
+  CWld         -> infWld
 
 
 -- Elaborate the type of types
@@ -158,11 +154,18 @@ infSet = return (ISet,ISet)
 
 -- Elaborate a constant
 infCons :: String -> TCM (Type,Term)
-infCons k = (,ICns k) <$> lookupSigma k
+infCons k = do
+  _T <- lookupSigma k
+  let t = ICns k
+--  sayRule $ InferCns (CCns k) _T t
+  return (_T,t)
 
 -- Elaborate a variable reference
 infVar :: Ref -> TCM (Type,Term)
-infVar x = (,IVar x) <$> lookupGamma x
+infVar x = do
+  _T <- lookupGamma x
+  let t = IVar x
+  return (_T,t)
 
 -- Elaborate function types
 infFun :: CBind -> CExpr -> TCM (Type,Term)
@@ -185,7 +188,7 @@ infLam r fv x e = do
 subSC :: FList -> TCM Type
 subSC fl = do
   _X <- freshMeta ISet
-  say "Generating subsequence constraint"
+--  say "Generating subsequence constraint"
   addC (SubC _X (getList fl))
   return _X
 
@@ -200,10 +203,12 @@ infApp e1 e2 = do
 -- If the thing is a known function type - check against domain
 appAt :: (Term,Type) -> CExpr -> TCM (Term,Type)
 appAt (t, _T) e = case _T of
-  (IFun (x, _U) _V) -> sayRule AppKnown >> do
+  (IFun (x, _U) _V) -> do
+    --sayRule AppKnown
     u <- e ⇇ _U
     return (IApp t u, Sub u x ® _V)
-  _ -> sayRule AppUnknown >> do
+  _ -> do
+    --sayRule AppUnknown
     (_U,u) <- infer e
     x  <- freshBind 
     _Y <- addBind (x,_U) $ freshMeta ISet
@@ -236,7 +241,7 @@ phiExp _as (IBind f _T : bs) = go _as
 -- returning the sig if it is the case
 subSD :: FList -> [IBind] -> TCM Type
 subSD fl fT = do
-  say "Running subsequence check"
+--  say "Running subsequence check"
   unless (subsequence (getList fl) (map ibF fT)) $ throwError
     (show fl ++ " is not a subsequence of " ++ show fT)
   return (ISig fT)
@@ -245,8 +250,8 @@ subSD fl fT = do
 -- This elaboration is very tedious when following the rules exactly
 infSig :: [FBind] -> TCM (Type,Term)
 infSig fs = case fs of 
-  [] -> sayRule InferRecB >> return (ISet, ISig [])
-  (FBind f _D : fs') -> sayRule InferRecC >> do
+  [] -> return (ISet, ISig [])
+  (FBind f _D : fs') -> do
     _U <-                                      _D ⇇ ISet
     (ISig fbs) <- addBind (field f,_U) $ CSig fs' ⇇ ISet
     return (ISet, ISig $ IBind f _U : fbs)
@@ -259,14 +264,16 @@ infEStr phiCs = do
   
 -- Generate expansion constraints
 genExp :: [Phi] -> TCM (Type,Term)
-genExp phis = say "Generating expansion constraint" >> do
+genExp phis = do
+--  say "Generating expansion constraint"
   (_Y,_X) <- freshMetas
   addC (ExpC _X phis _Y)
   return (_X,_Y)
 
 -- Special elaboration of assignments
 phiInf :: CAssign -> TCM Phi
-phiInf phiC = say "Invoking special phi inference" >> do
+phiInf phiC = do
+--    say "Invoking special phi inference"
     (_V,_v) <- infer (getAExpr phiC)
     return . flip Phi _V . maybe (Pos _v) (flip Named _v) $ getAField phiC
 
@@ -281,13 +288,13 @@ infProj e f = do
 handleProj :: Term -> Field -> Type -> TCM (Term,Type)
 handleProj t f _T = case _T of
   (ISig fs ) -> do
-    say "Transforming projection type"
+--    say "Transforming projection type"
     (fs',_U) <- sigLookup fs f
     let proj = IProj t f
     let substs = map (Sub proj . field ) fs'
     return (proj, foldl (flip sigmaFun) _U substs)
   _          -> do
-    say "Generating projection constraint"
+--    say "Generating projection constraint"
     (_Y,_X) <- freshMetas
     addC (PrjC _T t f _Y _X)
     return (_Y,_X)
@@ -303,49 +310,55 @@ infWld = do -- swap <$> freshMetas
 
 -- Generate a fresh metavariable of a given type
 freshMeta :: Type -> TCM Term
-freshMeta _T = sayRule FreshMeta >> do
-  metaIdx <- metaC <$> get
-  modify incMetaC
+freshMeta _T = do
+  metaIdx <- metaC . snd <$> get
+  modify (second incMetaC)
   _Γ <- gamma <$> ask 
   let meta = Meta metaIdx _T _Γ
-  modify (addMeta meta)
+  modify (second (addMeta meta))
   return $ IMeta meta []
 
 -- Generate two fresh metavariables,
 -- the second being the type of the first
 freshMetas :: TCM (Term,Type)
-freshMetas = sayRule FreshMetas >> do
+freshMetas = do
   _X <- freshMeta ISet
   _Y <- freshMeta _X
   return (_Y,_X)
 
 -- Guaranteed fresh bind (unknown binds are not created during scope checking)
 freshBind :: TCM Ref
-freshBind = say "Creating a fresh binding" >> do
-  bC <- bindC <$> get
-  modify incBindC
+freshBind = do
+--  say "Creating a fresh binding"
+  bC <- bindC . snd <$> get
+  modify (second incBindC)
   return $ V Unknown bC
 
 -- Add a constraint with current context to constraint store
 addC :: Constraint -> TCM ()
-addC _C = sayRule AddConstraint >> do
+addC _C = do
   _Γ <- gamma <$> ask -- retrieve the current variable context
-  say $ "Creating a constraint with this context: " ++ show _Γ
-  modify (addConstraint (CConstr _Γ _C)) -- add the constraint to the store
+--  say $ "Creating a constraint with this context: " ++ show _Γ
+  modify (second $ addConstraint (CConstr _Γ _C)) -- add the constraint to the store
 
 
 -- ##  Rule references ## ----------------------------------
 
+data Rule = Indexed Rule' RuleIdx
+          | Unindexed Rule'
+          | InferOutput Type Term RuleIdx
+          | CheckingOutput Term RuleIdx
+
 -- Rules used in type checking - show instance will reference rules (eventually)
-data Rule =
+data Rule' =
    CheckGen -- Check/Eq stuff <
  | EqRedRefl --               <
  | EqRedGenC --               <
 -- ============================
- | InferSet -- Basics < 
- | InferCns --        <
- | InferVar --        <
- | InferWld --        <
+ | InferSet -- Basics     <
+ | InferCns CExpr Type Term -- <
+ | InferVar CExpr Type Term -- <
+ | InferWld Type Term -- <
  | InferFun --        <
  | InferRecB --       <
  | InferRecC --       <

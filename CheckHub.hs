@@ -4,6 +4,7 @@ module CheckHub where
 import Surface
 import Core
 import ScopeChecking
+import Elaboration
 import ElabSpec
 import Internal
 import Types
@@ -25,6 +26,8 @@ data OptChkProb = OCP {posts :: [((Name,SExpr), Maybe Type)],
                        termS :: SExpr, 
                        typeS :: (SExpr,Maybe Type)}
 
+printLog _ = putStrLn "LOG"
+
 
 -- Don't look at it right now
 process :: ChkProb -> IO ()
@@ -32,7 +35,7 @@ process prob = do
     let result = processProb prob
     either (\err -> putStrLn "A scope checking error occured" >> putStrLn err) handle result
   where handle (log,xi,expr,result) = do
-          putStrLn (fromDList log)
+          printLog log
           either (\err -> putStrLn "An elaboration error occured" >> putStrLn err) (handle' expr) result
           putStrLn " == Meta Context =="
           print xi
@@ -75,7 +78,7 @@ processOpt prob = do
     let result = processOptProb prob
     either (\err -> putStrLn "A scope checking error occured" >> putStrLn err) handle result
   where handle (log,xi,expr,result) = do
-          putStrLn (fromDList log)
+          printLog log
           printSurface (map fst (posts prob)) (typeS prob) (termS prob)
           printCore expr
           either (\err -> putStrLn "An elaboration error occured" >> putStrLn err) (handle' expr) result
@@ -95,13 +98,13 @@ processOpt prob = do
           putStrLn . showTerm $ trm
 
 
-processProb :: ChkProb -> Either Error (Log, Xi, ([(Name,CExpr)], CExpr,CExpr), Either Error ([(Name,Type)],Type,Term))
+processProb :: ChkProb -> Either Error ([Rule], Xi, ([(Name,CExpr)], CExpr,CExpr), Either Error ([(Name,Type)],Type,Term))
 processProb prob = go (unzip (constants prob)) (typ prob) (term prob)
   where go (ns,pstS) typS trmS = ccurr ns elabProblem <$> snd (scopecheckProb pstS typS trmS)
         ccurr ns f (a,b,c) = f (zip ns a) b c
 
 
-processOptProb :: OptChkProb -> Either Error (Log, Xi, ([(Name,CExpr)], CExpr,CExpr), Either Error ([(Name,Type)],Type,Term))
+processOptProb :: OptChkProb -> Either Error ([Rule], Xi, ([(Name,CExpr)], CExpr,CExpr), Either Error ([(Name,Type)],Type,Term))
 processOptProb prob = go (first unzip $ unzip (posts prob)) (typeS prob) (termS prob)
    where go ((ns,exps),alts) (typS,typI) trmS = elabProb ns alts typI <$> snd (scopecheckProb exps typS trmS)
          elabProb ns alts typI (exprs,typC,trmC) = elabOptProblem (zip (zip ns exprs) alts) trmC (typC,typI)
