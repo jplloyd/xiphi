@@ -42,10 +42,11 @@ data CExpr =
  | CVar Ref                 -- Variable
  | CSet                     -- Type of types
  | CFun CBind CExpr         -- Dependent function type
- | CLam Ref FList Ref CExpr -- Lambda abstraction (bind, list of impl, expl bind, body)
+ | CLam CBind CExpr         -- Lambda abstraction
  | CApp CExpr CExpr         -- Application
  | CSig [FBind]             -- Record type
- | CEStr [CAssign]          -- Expandable record
+ | CESig FList              -- Expandable sig
+ | CEStr [CAssign]          -- Expandable struct
  | CProj CExpr Field        -- Projection
  | CWld                     -- Wildcard/underscore
 
@@ -58,9 +59,10 @@ instance Show CExpr where
     CVar n -> show n
     CSet   -> "Set"
     CFun b e -> show b ++ arrowRight ++ show e
-    CLam r fs b e -> par $ "\\" ++ par (show r ++ " : " ++ show fs) ++ show b ++ arrowRight ++ show e
+    CLam b e -> par $ "\\" ++ show b ++ arrowRight ++ show e
     CApp e1 e2 -> par (show e1) ++ " " ++ show e2
     CSig bs -> "sig" ++ brace (concatMap (strip . show) bs)
+    CESig fs -> "esig" ++ show fs
     CEStr asn -> "estr" ++ brace (intercalate "," (map (strip . show) asn))
     CProj e f -> show e ++"."++ f
     CWld -> "_"
@@ -84,11 +86,10 @@ instance LatexPrintable CExpr where
        CVar r -> lP r
        CSet -> ltx . mathit $ "Set"
        CFun cb e -> lP cb <++> ltxArr <++> lP e
-       CLam r fs v e -> ltx "\\lambda_e"
-                        <©> lPar (lP r <++> ltx " : " <++> lP fs)
-                        <©> lP v <++> ltxArr <++> lP e
+       CLam cb e -> ltx "\\lambda" <©> lP cb <++> ltxArr <++> lP e
        CApp e1 e2 -> lP e1 <¢> optMod needPar lPar lP e2
        CSig fbs -> lLift (surround "\\sig{" "}") (lComma fbs)
+       CESig fs -> lLift (surround "\\esig{" "}") (latexPrint fs)
        CEStr cas -> lLift (surround "\\estruct{" "}") $ lComma cas
        CProj e f -> lP e <++> ltx ("."++mathit f)
        CWld -> ltx "__"
@@ -106,3 +107,4 @@ instance LatexPrintable CAssign where
 
 instance LatexPrintable FList where
   latexPrint (FL fs) = ltx . lBrace . intercalate ", " $ fs
+  

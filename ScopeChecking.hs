@@ -120,10 +120,10 @@ scopecheck' _e = case _e of
     say $ "Transforming lambda abstraction: " ++ show _e
     unique impls
     r <- freshRecBind
-    v <- freshVarBind
-    let recsubsts = (expl, CVar v) : map (\f -> (f, CProj (CVar r) f)) impls
+    x <- freshVarBind
+    let recsubsts = (expl, CVar x) : map (\f -> (f, CProj (CVar r) f)) impls
     e' <- addBinds recsubsts (scopecheck' e)
-    return $ CLam r (FL impls) v e'
+    return $ CLam (CBind r $ CESig (FL impls)) $ CLam (CBind x CWld) e'
   SWld -> say "Transforming wildcard..." >> return CWld
 
     

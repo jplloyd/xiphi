@@ -97,16 +97,12 @@ lookupGamma n = lookupE n . gamma <$> ask >>= \mt -> maybeErr mt id errMsg
 
 check :: CExpr -> Type -> TCM Term
 check _e _T = case (_e,_T) of
-  (CLam r1 fs x1 e, IFun (r2,sig@(ISig fT)) (IFun (x2,_U) _V)) -> do
-    unless (subsequence (getList fs) (map ibF fT)) $ throwError
-      (show fs ++ " is not a subsequence of " ++ show fT)
-    let sub _1 _2 = (Sub (IVar _1) _2 ®)
-        _U' = sub r1 r2 _U
-        _V' = sub x1 x2 $ sub r1 r2 _V
-        br = (r1,sig)
-        bx = (x1,_U')
-    v <- addBinds [bx,br] $ e ⇇ _V'
-    return(ILam br (ILam bx v))
+  (CLam (CBind x1 _D) e, IFun (x2,_U) _V) -> do
+    leffe _D _U
+    let bx = (x1,_U)
+        _V' = Sub (IVar x1) x2 ® _V
+    v <- addBinds [bx] $ e ⇇ _V'
+    return (ILam bx v)
   (CEStr phiCs, ISig fUs) -> do
     liftM IStruct $ expRec phiCs fUs
   (CWld,_) -> freshMeta _T
@@ -114,6 +110,12 @@ check _e _T = case (_e,_T) of
     (_U,u) <- infer _e
     genEq u _U _T
 
+leffe :: CExpr -> Type -> TCM ()
+leffe CWld       _          = return ()
+leffe (CESig fs) (ISig fUs) =
+    unless (subsequence (getList fs) (map ibF fUs)) $ throwError
+      (show fs ++ " is not a subsequence of " ++ show fUs)
+leffe _          _          = error "No support for bound type"
 
 -- Expand structs, inserting metavariables for missing arguments
 -- fails if there are too many arguments (relative to expl. assignments)
@@ -151,9 +153,10 @@ infer _e = case _e of
   CVar r       -> infVar r
   CSet         -> infSet
   CFun b e     -> infFun b e
-  CLam r i e b -> infLam r i e b
+  CLam b e     -> infLam b e
   CApp e1 e2   -> infApp e1 e2
   CSig bsd     -> infSig bsd
+  CESig fs     -> infESig fs
   CEStr n      -> infEStr n
   CProj e f    -> infProj e f
   CWld         -> infWld
@@ -184,22 +187,13 @@ infFun (CBind x _D) _E = do
   _V <- addBind (x,_U) $ _E ⇇ ISet
   return (ISet,IFun (x,_U) _V)
 
--- Elaborate an expandable Lambda
-infLam :: Ref -> FList -> Ref -> CExpr -> TCM (Type,Term)
-infLam r fv x e = do
-  _T <- subSC fv
-  let br = (r,_T)
-  _U <- addBind br $ freshMeta ISet
-  let bv = (x,_U)
-  (_V,v) <- addBinds [bv, br] $ infer e
-  return (IFun br (IFun bv _V), ILam br (ILam bv v))
-
--- f ⊆ T - subsequence constraint with a fresh meta for the type
-subSC :: FList -> TCM Type
-subSC fl = do
-  _X <- freshMeta ISet
-  addC (SubC _X (getList fl))
-  return _X
+-- Elaborate a lambda
+infLam :: CBind -> CExpr -> TCM (Type,Term)
+infLam (CBind x _D) e = do
+  _U <- _D ⇇ ISet
+  let bx = (x,_U)
+  (_V,v) <- addBinds [bx] $ infer e
+  return (IFun bx _V,ILam bx v)
 
 -- Elaborate an application
 infApp :: CExpr -> CExpr -> TCM (Type,Term)
@@ -231,6 +225,14 @@ infSig fs = case fs of
     _U <-                                      _D ⇇ ISet
     (ISig fbs) <- addBind (field f,_U) $ CSig fs' ⇇ ISet
     return (ISet, ISig $ IBind f _U : fbs)
+
+-- Elaborate an expandable sig
+-- f ⊆ T - subsequence constraint with a fresh meta for the type
+infESig :: FList -> TCM (Type,Term)
+infESig fl = do
+  _X <- freshMeta ISet
+  addC (SubC _X (getList fl))
+  return (ISet, _X)
 
 -- Elaborate an expandable struct
 infEStr :: [CAssign] -> TCM (Type,Term)
