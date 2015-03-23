@@ -1,23 +1,92 @@
-{-# OPTIONS -Wall #-}
+{-# LANGUAGE TypeSynonymInstances#-}
 module Derivation where
 
 import Types
 import Util
 import Internal
+import Core
+import LatexPrint
 
 -- ##  Rule references ## ----------------------------------
 
--- Temporary structure - still working on this
-data Rule = Indexed Rule' RuleIdx
-          | Unindexed Rule'
-          | Simple Rule'
-          | InferRes Type Term RuleIdx
-          | CheckRes Term RuleIdx
+-- Special symbols for derivation notation
 
-data RuleType = Infer | Check
+-- semi-circle facing left (checking)
+chkStart :: Latex
+chkStart = ltx "\\llparenthesis"
 
--- Rules used in type checking - show instance will reference rules (eventually)
-data Rule' =
+-- semi-circle facing right (inference)
+infStart :: Latex
+infStart = ltx "\\rrparenthesis"
+
+-- Checking double arrows
+lChk :: Latex
+lChk = ltx "\\leftleftarrows"
+
+-- Inference double arrows
+lInf :: Latex
+lInf = ltx "\\rightrightarrows"
+
+-- leads to macro
+leadsTo :: Latex
+leadsTo = ltx "~>" -- ltx "\\leadsto"
+
+-- beginning of a multiline derivation
+start :: Latex
+start = ltx "\\rrceil"
+
+-- result (output) of a multiline derivation
+end :: Latex
+end = ltx "\\llfloor"
+
+-- double bracket right (single line derivation)
+comp :: Latex
+comp = ltx "\\rrbracket"
+
+
+-- post only
+-- place first argument as superscript of second argument
+superScript :: Latex -> Latex -> Latex
+superScript s inp = inp <++> lLift (surround "^{" "}") s
+
+-- subscript only
+preScript :: Latex -> Latex -> Latex
+preScript p inp = lLift (surround "\\prescript{}{" "}") p <++> lxBrace inp
+
+startMulti :: RuleIdx -> Latex
+startMulti idx = superScript (lP idx) start
+
+endMulti :: RuleIdx -> Latex
+endMulti idx = preScript (lP idx) end
+
+-- Different types of rules for printing (rules may be compacted where appropriate)
+data Rule = InfIndexed CExpr RuleName RuleIdx -- Beginning of an inference with relevant rule
+          | ChkIndexed CExpr Type RuleName RuleIdx -- Beginning of a checking with relevant rule
+          | InfCompact CExpr RuleName [RuleName] Type Term -- One-line inference
+          | ChkCompact CExpr Type RuleName [RuleName] Term -- One-line checking
+          | Simple RuleName -- Just an eqref to the rule
+          | InferRes Type Term RuleIdx -- Result of inference
+          | CheckRes Term RuleIdx -- Result of checking
+
+-- consider surrounding everything in math context
+instance LatexPrintable Rule where
+  latexPrint r = case r of -- maybe factor our the first four
+    InfIndexed e rn idx -> infStart <©> lP e <©> startMulti idx <©> lP rn
+    ChkIndexed e _T rn idx -> chkStart <©> lP e <©> lChk <©> lP _T <©> startMulti idx <©> lP rn
+    -- could boldface the main rule to differentiate (but will always be first)
+    InfCompact e rn rs _T t -> infStart <©> lP e <©> comp <©> lP rn <©> lConc (map lP rs)
+                               <©> lInf <©> lP _T <©> leadsTo <©> lP t
+    ChkCompact e _T rn rs t -> chkStart <©> lP e <©> lChk <©> lP _T <©> comp <©> lP rn <©>
+                               lConc (map lP rs) <©> leadsTo <©> lP t
+    Simple rn -> lP rn
+    InferRes _T t idx -> endMulti idx <©> lInf <©> lP _T <©> leadsTo <©> lP t
+    CheckRes t idx -> endMulti idx <©> leadsTo <©> lP t
+
+instance LatexPrintable RuleIdx where
+  latexPrint  = ltx . show
+
+  -- Rules used in type checking - show instance will reference rules (eventually)
+data RuleName =
    CheckGen -- general checking
  | CheckLam -- special rule for lambdas
  | CheckExpB -- special rule for records (base)
@@ -57,9 +126,11 @@ data Rule' =
 -- ===========
   deriving Show
 
+instance LatexPrintable RuleName where
+  latexPrint = ltx . toEqRef
 
 -- Create a latex eqref for each rule
-toEqRef :: Rule' -> String
+toEqRef :: RuleName -> String
 toEqRef r = surround "\\eqref{" "}" $ case r of
   CheckLam -> "eq:chklam"
   CheckExpB -> "eq:chkrecbase"

@@ -29,7 +29,7 @@ lxBrace :: Latex -> Latex
 lxBrace = lLift lBrace
 
 lComma :: LatexPrintable a => [a] -> Latex
-lComma = foldr (<++>) (ltx "") . intersperse (ltx ", ") . map lP
+lComma = lConc . intersperse (ltx ", ") . map lP
 
 ltx :: String -> Latex
 ltx = Latex
@@ -48,3 +48,6 @@ mathit n = "\\mathit{" ++ n ++ "}"
 
 lBrace :: String -> String
 lBrace n = "\\sbrace{" ++ n ++ "}"
+
+lConc :: [Latex] -> Latex
+lConc = foldr (<++>) (ltx "")
