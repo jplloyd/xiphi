@@ -52,14 +52,12 @@ gamma = snd
 type RuleIdx = Int
 
 -- Type checking monad - error handling, progress logging,
--- reader for constants and local variables, state for meta/constraint store and rule index
+-- reader for constants and local variables, state for meta/constraint 
+-- store and rule index (used to connect start and end in linear 
+-- derivation printing + possible used for indentation)
 type TCM = ErrT (WriterT [Rule] (ReaderT TCEnv (State (RuleIdx,Xi))))
 
 -- ##    Logging    ## -------------------------------------
-
--- Simple logging - arbitrary strings
---say :: String -> TCM ()
---say s = lift $ tell (toDList (s ++ "\n"))
 
 sayRule :: Rule -> TCM ()
 sayRule r = lift (tell [r])
@@ -98,7 +96,6 @@ lookupGamma n = lookupE n . gamma <$> ask >>= \mt -> maybeErr mt id errMsg
 check :: CExpr -> Type -> TCM Term
 check e _T = case (e,_T) of
   (CLam r1 fs v1 e', IFun (r2,ISig fT) (IFun (v2,_U) _V)) -> do
---    say "Special lambda check"
     sg <- subSD fs fT
     let sub _1 _2 = (Sub (IVar _1) _2 ®)
         _U' = sub r1 r2 _U
@@ -108,12 +105,10 @@ check e _T = case (e,_T) of
     et <- addBinds [bv,br] $ e' ⇇ _V'
     return(ILam br (ILam bv et))
   (CEStr phiS, ISig fT) -> do
---    say "Special struct check"
     assn <- phiExp phiS fT
     return (IStruct assn)
   (CWld,_) -> freshMeta _T
   _ -> do
-    sayRule (Unindexed CheckGen)
     (_U,u) <- infer e
     genEq u _U _T
 
@@ -124,8 +119,8 @@ check e _T = case (e,_T) of
 -- Equality will either resolve immediately through reflexivity - or generate an equality constraint
 -- even better would be to just check if they are wrong straight away (very much possible)
 genEq :: Term -> Type -> Type -> TCM Term
-genEq u _U _T | _T =$= _U = sayRule (Unindexed EqRedRefl) >> return u
-              | otherwise = sayRule (Unindexed EqRedGenC) >> do
+genEq u _U _T | _T =$= _U = return u
+              | otherwise = do
                   _Y <- freshMeta _T
                   addC (EquC _U _T _Y u)
                   return _Y
@@ -156,7 +151,6 @@ infCons :: String -> TCM (Type,Term)
 infCons k = do
   _T <- lookupSigma k
   let t = ICns k
---  sayRule $ InferCns (CCns k) _T t
   return (_T,t)
 
 -- Elaborate a variable reference
@@ -187,7 +181,6 @@ infLam r fv x e = do
 subSC :: FList -> TCM Type
 subSC fl = do
   _X <- freshMeta ISet
---  say "Generating subsequence constraint"
   addC (SubC _X (getList fl))
   return _X
 
@@ -203,11 +196,9 @@ infApp e1 e2 = do
 appAt :: (Term,Type) -> CExpr -> TCM (Term,Type)
 appAt (t, _T) e = case _T of
   (IFun (x, _U) _V) -> do
-    --sayRule AppKnown
     u <- e ⇇ _U
     return (IApp t u, Sub u x ® _V)
   _ -> do
-    --sayRule AppUnknown
     (_U,u) <- infer e
     x  <- freshBind 
     _Y <- addBind (x,_U) $ freshMeta ISet
@@ -240,7 +231,6 @@ phiExp _as (IBind f _T : bs) = go _as
 -- returning the sig if it is the case
 subSD :: FList -> [IBind] -> TCM Type
 subSD fl fT = do
---  say "Running subsequence check"
   unless (subsequence (getList fl) (map ibF fT)) $ throwError
     (show fl ++ " is not a subsequence of " ++ show fT)
   return (ISig fT)
@@ -264,7 +254,6 @@ infEStr phiCs = do
 -- Generate expansion constraints
 genExp :: [Phi] -> TCM (Type,Term)
 genExp phis = do
---  say "Generating expansion constraint"
   (_Y,_X) <- freshMetas
   addC (ExpC _X phis _Y)
   return (_X,_Y)
@@ -272,7 +261,6 @@ genExp phis = do
 -- Special elaboration of assignments
 phiInf :: CAssign -> TCM Phi
 phiInf phiC = do
---    say "Invoking special phi inference"
     (_V,_v) <- infer (getAExpr phiC)
     return . flip Phi _V . maybe (Pos _v) (flip Named _v) $ getAField phiC
 
@@ -287,20 +275,18 @@ infProj e f = do
 handleProj :: Term -> Field -> Type -> TCM (Term,Type)
 handleProj t f _T = case _T of
   (ISig fs ) -> do
---    say "Transforming projection type"
     (fs',_U) <- sigLookup fs f
     let proj = IProj t f
     let substs = map (Sub proj . field ) fs'
     return (proj, foldl (flip sigmaFun) _U substs)
   _          -> do
---    say "Generating projection constraint"
     (_Y,_X) <- freshMetas
     addC (PrjC _T t f _Y _X)
     return (_Y,_X)
   
 -- Elaborate an unknown expression
 infWld :: TCM (Type,Term)
-infWld = do -- swap <$> freshMetas
+infWld = do
   (_Y,_X) <- freshMetas
   return (_X,_Y)
 
@@ -328,7 +314,6 @@ freshMetas = do
 -- Guaranteed fresh bind (unknown binds are not created during scope checking)
 freshBind :: TCM Ref
 freshBind = do
---  say "Creating a fresh binding"
   bC <- bindC . snd <$> get
   modify (second incBindC)
   return $ V Unknown bC
@@ -337,12 +322,12 @@ freshBind = do
 addC :: Constraint -> TCM ()
 addC _C = do
   _Γ <- gamma <$> ask -- retrieve the current variable context
---  say $ "Creating a constraint with this context: " ++ show _Γ
   modify (second $ addConstraint (CConstr _Γ _C)) -- add the constraint to the store
 
 
 -- ##  Rule references ## ----------------------------------
 
+-- Temporary structure - still working on this
 data Rule = Indexed Rule' RuleIdx
           | Unindexed Rule'
           | Simple Rule'
