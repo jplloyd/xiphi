@@ -138,11 +138,11 @@ latexConstraint c = case c of
                        par (latexTerm _X ++ " <- " ++ latexTerm u)
 
 latexPhis :: [Phi] -> String
-latexPhis phis = intercalate "," $ map latexPhi phis
+latexPhis phis = latexFields $ map latexPhi phis
   where latexPhi (Phi asgn _T) = latexAssn asgn ++ ":" ++ latexTerm _T
 
 latexFields :: [String] -> String
-latexFields fields = intercalate "," fields
+latexFields = intercalate ","
 
 latexRef :: Ref -> String
 latexRef (V g idx) = flip underset (show idx) $ case g of
@@ -297,7 +297,7 @@ sigmaFun s trm = case trm of
   (ILam (r,u) v) -> ILam (r,go u) (go v)
   (IApp t1 t2)   -> IApp (go t1) (go t2)
   (ISig    ibs)  -> ISig    $ substBinds s ibs
-  (IStruct ass)  -> IStruct $ substAssss s ass
+  (IStruct ass)  -> IStruct $ map (\(Ass n t) -> Ass n $ go t) ass
   (IProj t f)    -> projReduce $ IProj (go t) f
   (IMeta x olds) -> IMeta x (addIfInGamma x s olds)
   (IVar x)       -> subst x s
@@ -307,10 +307,9 @@ sigmaFun s trm = case trm of
          if isJust (lookup ref bs) then (s :) else id
        subst x (Sub t y) = if x == y then t else IVar x
 
-substBinds s ibs = map intoBindings ibs
+substBinds :: Substitution -> [IBind] -> [IBind]
+substBinds s = map intoBindings
   where intoBindings (IBind n t) = IBind n $ sigmaFun s t
-substAssss s ass = map intoAssignss ass
-  where intoAssignss (Ass   n t) = Ass   n $ sigmaFun s t
 
 -- Reduces a projection if possible
 projReduce :: Term -> Term
