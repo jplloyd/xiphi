@@ -296,18 +296,21 @@ sigmaFun s trm = case trm of
   (IFun (r,u) v) -> IFun (r,go u) (go v)
   (ILam (r,u) v) -> ILam (r,go u) (go v)
   (IApp t1 t2)   -> IApp (go t1) (go t2)
-  (ISig ibs)     -> ISig    $ map intoBindings ibs
-  (IStruct ass)  -> IStruct $ map intoAssignss ass
+  (ISig    ibs)  -> ISig    $ substBinds s ibs
+  (IStruct ass)  -> IStruct $ substAssss s ass
   (IProj t f)    -> projReduce $ IProj (go t) f
   (IMeta x olds) -> IMeta x (addIfInGamma x s olds)
   (IVar x)       -> subst x s
   _ -> trm -- Set and constants
  where go = sigmaFun s
-       intoBindings (IBind n t) = IBind n $ go t
-       intoAssignss (Ass   n t) = Ass   n $ go t
        addIfInGamma (Meta _ _ (Env bs)) s@(Sub _ ref) =
          if isJust (lookup ref bs) then (s :) else id
        subst x (Sub t y) = if x == y then t else IVar x
+
+substBinds s ibs = map intoBindings ibs
+  where intoBindings (IBind n t) = IBind n $ sigmaFun s t
+substAssss s ass = map intoAssignss ass
+  where intoAssignss (Ass   n t) = Ass   n $ sigmaFun s t
 
 -- Reduces a projection if possible
 projReduce :: Term -> Term
