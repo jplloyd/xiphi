@@ -90,29 +90,47 @@ lookupGamma n = lookupE n . gamma <$> ask >>= \mt -> maybeErr mt id errMsg
 -- ##  Checking and equality  ## ---------------------------
 
 -- Check a core expression against a type
-check :: CExpr -> Type -> TCM Term
-check e _T = case (e,_T) of
-  (CLam r1 fs v1 e', IFun (r2,ISig fT) (IFun (v2,_U) _V)) -> do
-    say "Special lambda check"
-    sg <- subSD fs fT
-    let sub _1 _2 = (Sub (IVar _1) _2 ®)
-        _U' = sub r1 r2 _U
-        _V' = sub v1 v2 $ sub r1 r2 _V
-        br = (r1,sg)
-        bv = (v1,_U')
-    et <- addBinds [bv,br] $ e' ⇇ _V'
-    return(ILam br (ILam bv et))
-  (CEStr phiS, ISig fT) -> do
-    say "Special struct check"
-    assn <- phiExp phiS fT
-    return (IStruct assn)
-  (CWld,_) -> freshMeta _T
-  _ -> sayRule CheckGen >> do
-    (_U,u) <- infer e
-    genEq u _U _T
-
 (⇇) :: CExpr -> Type -> TCM Term
 (⇇) = check
+
+check :: CExpr -> Type -> TCM Term
+check _e _T = case (_e,_T) of
+  (CLam r1 fs x1 e, IFun (r2,sig@(ISig fT)) (IFun (x2,_U) _V)) -> do
+    say "Special lambda check"
+    unless (subsequence (getList fs) (map ibF fT)) $ throwError
+      (show fs ++ " is not a subsequence of " ++ show fT)
+    let sub _1 _2 = (Sub (IVar _1) _2 ®)
+        _U' = sub r1 r2 _U
+        _V' = sub x1 x2 $ sub r1 r2 _V
+        br = (r1,sig)
+        bx = (x1,_U')
+    v <- addBinds [bx,br] $ e ⇇ _V'
+    return(ILam br (ILam bx v))
+  (CEStr phiCs, ISig fUs) -> do
+    say "Special struct check"
+    liftM IStruct $ expRec phiCs fUs
+  (CWld,_) -> freshMeta _T
+  _ -> sayRule CheckGen >> do
+    (_U,u) <- infer _e
+    genEq u _U _T
+
+
+-- Expand structs, inserting metavariables for missing arguments
+-- fails if there are too many arguments (relative to expl. assignments)
+expRec :: [CAssign] -> [IBind] -> TCM [Assign']
+expRec phiCs fUs = case (phiCs,fUs) of
+    ([], []) -> return [] -- Base
+    (_ , []) -> throwError 
+      "Too many/out-of-order arguments for expansion!"
+    (_, (IBind f _U) : fUs') -> do  -- Cons
+      let (tcm_u, phiCs') = phiFun f _U
+      u <- tcm_u
+      fus <- expRec phiCs' $ substBinds (Sub u $ field f) fUs'
+      return (Ass f u : fus)
+  where phiFun f _U = case phiCs of
+            ((CPos      e) : asss)           -> (e ⇇ _U, asss) -- Match
+            ((CNamed f' e) : asss) | f' == f -> (e ⇇ _U, asss) -- Match
+            _ -> (freshMeta _U, phiCs) -- No match
 
 
 -- Equality will either resolve immediately through reflexivity - or generate an equality constraint
@@ -210,37 +228,6 @@ appAt (t, _T) e = case _T of
     t' <- genEq t _T (IFun (x,_U) _Y)
     return (IApp t' u, Sub u x ® _Y)
 
--- Expand structs, inserting metavariables for missing arguments
--- fails if there are too many arguments (relative to expl. assignments)
-phiExp :: [CAssign] -> [IBind] -> TCM [Assign']
-phiExp []  [] = return []
-phiExp _   [] = throwError "Too many/out-of-order arguments for expansion!"
-phiExp _as (IBind f _T : bs) = go _as
-  where go [] = nomatch []
-        go assn@(as:ass) = case as of
-            CPos e -> match e
-            CNamed f' e ->
-              if f == f'
-              then match e
-              else nomatch assn
-          where match e = do
-                  t <- e ⇇ _T
-                  assn' <- phiExp ass bs
-                  return (Ass f t : assn')
-        nomatch assn = do
-                t <- freshMeta _T
-                assn' <- phiExp assn bs
-                return (Ass f t : assn')
-
--- Check if the bindings are a subsequence of declarations from a sig,
--- returning the sig if it is the case
-subSD :: FList -> [IBind] -> TCM Type
-subSD fl fT = do
-  say "Running subsequence check"
-  unless (subsequence (getList fl) (map ibF fT)) $ throwError
-    (show fl ++ " is not a subsequence of " ++ show fT)
-  return (ISig fT)
-  
 -- Elaborate a record type
 -- This elaboration is very tedious when following the rules exactly
 infSig :: [FBind] -> TCM (Type,Term)
