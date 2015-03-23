@@ -12,6 +12,7 @@ import Internal hiding (addBind,addBinds)
 import qualified Internal as I
 import Types
 import Util
+import Derivation
 
 import Data.Tuple
 import Control.Arrow
@@ -48,8 +49,6 @@ sigma = fst
 
 gamma :: TCEnv -> Gamma
 gamma = snd
-
-type RuleIdx = Int
 
 -- Type checking monad - error handling, progress logging,
 -- reader for constants and local variables, state for meta/constraint 
@@ -312,62 +311,13 @@ addC _C = do
   _Γ <- gamma <$> ask -- retrieve the current variable context
   modify (second $ addConstraint (CConstr _Γ _C)) -- add the constraint to the store
 
-
--- ##  Rule references ## ----------------------------------
-
--- Temporary structure - still working on this
-data Rule = Indexed Rule' RuleIdx
-          | Unindexed Rule'
-          | Simple Rule'
-          | InferRes Type Term RuleIdx
-          | CheckRes Term RuleIdx
-
-data RuleType = Infer | Check
-
--- Rules used in type checking - show instance will reference rules (eventually)
-data Rule' =
-   CheckGen -- eq:checkrule
- | EqRedRefl -- eq:algeqrefl
- | EqRedGenC -- eq:addceq
--- ============================
- | InferSet -- eq:infset
- | InferCns -- eq:infc
- | InferVar -- eq:infv
- | InferWld -- eq:infunderscore
- | InferFun -- eq:inffuntyp
- | InferRecB -- eq:infrectypbas
- | InferRecC -- eq:infrectyprec
--- ====================
- | InferApp -- eq:infapp
- | AppKnown -- eq:appknown
- | AppUnknown -- eq:appunknown
--- ==========================
- | InferLam -- eq:infexplambda
- | SubSeqGenC -- eq:xiopssubs
--- ==========================
- | InferEStr -- eq:infexprec
- | InferPhiS -- eq:infphi
- | ExpGenC -- eq:xiopsstexp
--- ==========================
- | InferProj -- eq:infproj
- | ProjRed -- eq:unifprojconstraint
- | ProjGenC -- eq:xiopsproj
--- ==========================
- | FreshMeta -- Xi Operations <
- | FreshMetas --              <
- | AddConstraint --           <
--- ============================
-  deriving Show
-
-
--- monadic versions, but these errors will only appear if programming in Core directly
--- (no longer the work of the gentleman mentioned above).
-        
+-- Look up the field in a given list of binds, returning the type and preceding fields
 sigLookup :: [IBind] -> Field -> TCM ([Field],Type)
 sigLookup bs f = go [] bs
   where go _ [] = throwError $ "Attempted type lookup for nonexistent field: " ++ show f
         go prec (IBind f' _T : bs') = if f' == f then return (prec,_T) else go (f':prec) bs'
 
+-- Look up the assignment to the given field, throwing an error if it is not found
 structLookup :: [Assign'] -> Field -> TCM Term
 structLookup as f = go as
   where go [] = throwError $ "Attempted projection on nonexistent field: " ++ show f

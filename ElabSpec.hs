@@ -1,5 +1,6 @@
 module ElabSpec where
 
+import Derivation
 import Elaboration
 import Types
 import Internal

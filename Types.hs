@@ -11,6 +11,9 @@ type Name = String
 type Error = String
 type Log = DList Char
 
+type RuleIdx = Int
+
+
 -- Error handling
 type ErrT = ExceptT Error
 
