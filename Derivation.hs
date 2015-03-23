@@ -49,3 +49,36 @@ data Rule' =
 -- ============================
   deriving Show
 
+toEqRef :: Rule' -> String
+toEqRef r = case r of
+  CheckGen -- eq:checkrule
+  EqRedRefl -- eq:algeqrefl
+  EqRedGenC -- eq:addceq
+
+  InferSet -- eq:infset
+  InferCns -- eq:infc
+  InferVar -- eq:infv
+  InferWld -- eq:infunderscore
+  InferFun -- eq:inffuntyp
+  InferRecB -- eq:infrectypbas
+  InferRecC -- eq:infrectyprec
+
+  InferApp -- eq:infapp
+  AppKnown -- eq:appknown
+  AppUnknown -- eq:appunknown
+
+  InferLam -- eq:infexplambda
+  SubSeqGenC -- eq:xiopssubs
+
+  InferEStr -- eq:infexprec
+  InferPhiS -- eq:infphi
+  ExpGenC -- eq:xiopsstexp
+
+  InferProj -- eq:infproj
+  ProjRed -- eq:unifprojconstraint
+  ProjGenC -- eq:xiopsproj
+
+  FreshMeta -- Xi Operations <
+  FreshMetas --              <
+  AddConstraint --           <
+
