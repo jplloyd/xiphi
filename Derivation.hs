@@ -82,6 +82,7 @@ instance LatexPrintable Rule where
     InferRes _T t idx -> endMulti idx <©> lInf <©> lP _T <©> leadsTo <©> lP t
     CheckRes t idx -> endMulti idx <©> leadsTo <©> lP t
 
+-- somewhat redundant (and orphan instance)
 instance LatexPrintable RuleIdx where
   latexPrint  = ltx . show
 
@@ -102,8 +103,8 @@ data RuleName =
  | InferVar -- infer a variable
  | InferWld -- infer an underscore
  | InferFun -- infer a function type
- | InferRecB -- infer a record 
- | InferRecC
+ | InferSigB -- infer a record type (I guess)
+ | InferSigC
 -- ===========
  | InferApp -- infer a function application
  | AppKnown -- Type of head is known (in application)
@@ -149,8 +150,8 @@ toEqRef r = surround "\\eqref{" "}" $ case r of
   InferVar -> "eq:infv"
   InferWld -> "eq:infunderscore"
   InferFun -> "eq:inffuntyp"
-  InferRecB -> "eq:infrectypbas"
-  InferRecC -> "eq:infrectyprec"
+  InferSigB -> "eq:infrectypbas"
+  InferSigC -> "eq:infrectyprec"
 
   InferApp -> "eq:infapp"
   AppKnown -> "eq:appknown"
