@@ -68,7 +68,7 @@ eapp1 fe ae1 = SApp fe [] ae1
 
 elam1 n1 e = SLam [] n1 e
 
-dummy = SBind "£"
+dummy = SBind "\\_"
 
 fun = SFun []
 

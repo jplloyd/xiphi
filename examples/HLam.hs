@@ -69,7 +69,7 @@ elam1 n1 e = SLam [] n1 e
 elam2 n1 n2 e = elam1 n1 (elam1 n2 e)
 
 appEq = eapp1 cEq
-dummy = SBind "£"
+dummy = SBind "\\_"
 
 funTSet = SFun [bTSet]
 funASet = SFun [bASet]
