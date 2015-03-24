@@ -108,9 +108,9 @@ latexTerm _t = case _t of
    ISet -> mathit "Set"
    ICns n -> mathit n
    IVar n -> latexRef n
-   IFun (n,t) t' -> par $ (latexRef n) ++ ":" ++ latexTerm t ++ " -> " ++ latexTerm t'
-   ILam (n,t) t' -> "\\lambda " ++ par (latexRef n ++ ":" ++ latexTerm t) ++ " -> " ++ par (latexTerm t')
-   IApp t1 t2 -> (latexTerm t1) ++ "\\fsp" ++ par (latexTerm t2) -- this only needs to be parenthesized if it is an app I think
+   IFun (n,t) t' -> par (latexRef n ++ ":" ++ latexTerm t) ++ " -> " ++ latexTerm t'
+   ILam (n,t) t' -> "\\lambda " ++ par (latexRef n ++ ":" ++ latexTerm t) ++ " -> " ++ (latexTerm t')
+   IApp t1 t2 -> latexTerm t1 ++ "\\fsp " ++ optMod needPar par latexTerm t2
    ISig bs -> "\\sig{" ++ intercalate "," (map latexBs bs) ++ "}"
    IStruct assn -> "\\struct{" ++ intercalate "," (map latexAssn' assn) ++ "}"
    IProj t n -> latexTerm t ++ "." ++ mathit n
