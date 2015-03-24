@@ -5,15 +5,12 @@ import Surface
 import Core
 import ScopeChecking
 import Derivation
-import Elaboration
 import ElabSpec
 import Internal
 import Types
-import DList
 import LatexPrint
 
 import Data.List
-import Control.Arrow
 import Control.Applicative
 import Prelude hiding (log)
 
@@ -29,11 +26,10 @@ data OptChkProb = OCP {posts :: [((Name,SExpr), Maybe Type)],
                        termS :: SExpr, 
                        typeS :: (SExpr,Maybe Type)}
 
-printLog :: [Rule] -> IO ()
-printLog rs = do
-  putStrLn "\n\n"
-  putStrLn (unlines (intersperse "\\\\" $ map (show . lP) (compact rs)))
-  putStrLn "\n\n"
+printDerivation :: [Rule] -> IO ()
+printDerivation rs = do
+  let log = unlines (intersperse "\\\\" $ map (show . lP) (aggregate . compact $ rs))
+  writeFile "/home/jesper/dev/masterthesisproject/report/problems/derivlog.tex" log
 
 
 -- Don't look at it right now
@@ -42,15 +38,15 @@ process prob = do
     let result = processProb prob
     either (\err -> putStrLn "A scope checking error occured" >> putStrLn err) handle result
   where handle (log,xi,expr,result) = do
-          printLog log
+          printDerivation log
           either (\err -> putStrLn "An elaboration error occured" >> putStrLn err) (handle' expr) result
           putStrLn " == Meta Context =="
           print xi
-        handle' expr (posts,typ',trm) = do
+        handle' expr (posts',typ',trm) = do
           printSurface (constants prob) (typ prob) (term prob)
           printCore expr
           putStrLn " == Postulates == "
-          putStrLn $ concatMap printPost' posts
+          putStrLn $ concatMap printPost' posts'
           putStrLn " == Elab type == "
           putStrLn . showTerm $ typ'
           putStrLn " == Elab term == "
@@ -78,40 +74,7 @@ printCore (psts,typ',trm) = do
           putStrLn "-- core term"
           print trm
 
--- (Log, Xi, ([(Name,CExpr)], CExpr,CExpr), Either Error ([(Name,Type)],Type,Term))
--- Temporary, allegedly
-processOpt :: OptChkProb -> IO ()
-processOpt prob = do
-    let result = processOptProb prob
-    either (\err -> putStrLn "A scope checking error occured" >> putStrLn err) handle result
-  where handle (log,xi,expr,result) = do
-          printLog log
-          printSurface (map fst (posts prob)) (typeS prob) (termS prob)
-          printCore expr
-          either (\err -> putStrLn "An elaboration error occured" >> putStrLn err) (handle' expr) result
-          putStrLn " == Meta Context =="
-          print xi
-          putStrLn " == Latex constraints =="
-          putStrLn $ unlines . map (latexConstraint . constraint) $ constraints xi
-        handle' :: ([(Name,CExpr)], CExpr,CExpr) -> ([(Name,Type)],Type,Term) -> IO ()
-        handle' expr (posts,typ',trm) = do
-          putStrLn " == Postulates == "
-          putStrLn $ concatMap printPost' posts
-          putStrLn " == Latex Posts == "
-          putStrLn $ concatMap printLPost posts
-          putStrLn " == Elab type == "
-          putStrLn . showTerm $ typ'
-          putStrLn " == Elab term == "
-          putStrLn . showTerm $ trm
-
-
 processProb :: ChkProb -> Either Error ([Rule], Xi, ([(Name,CExpr)], CExpr,CExpr), Either Error ([(Name,Type)],Type,Term))
 processProb prob = go (unzip (constants prob)) (typ prob) (term prob)
   where go (ns,pstS) typS trmS = ccurr ns elabProblem <$> snd (scopecheckProb pstS typS trmS)
         ccurr ns f (a,b,c) = f (zip ns a) b c
-
-
-processOptProb :: OptChkProb -> Either Error ([Rule], Xi, ([(Name,CExpr)], CExpr,CExpr), Either Error ([(Name,Type)],Type,Term))
-processOptProb prob = go (first unzip $ unzip (posts prob)) (typeS prob) (termS prob)
-   where go ((ns,exps),alts) (typS,typI) trmS = elabProb ns alts typI <$> snd (scopecheckProb exps typS trmS)
-         elabProb ns alts typI (exprs,typC,trmC) = elabOptProblem (zip (zip ns exprs) alts) trmC (typC,typI)

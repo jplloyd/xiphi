@@ -87,16 +87,16 @@ chkCmp :: CExpr -> Type -> RuleName -> [RuleName] -> Term -> Rule
 chkCmp e _T rn rs t = Compact e (ChkCmp _T t) rn rs
 
 infRes :: Type -> Term -> RuleIdx -> Rule
-infRes _T t = Result (InfRes _T t)
+infRes _T t = Result [] (InfRes _T t)
 
 chkRes :: Term -> RuleIdx -> Rule
-chkRes = Result . ChkRes
+chkRes = Result [] . ChkRes
 
 -- Different types of rules for printing (rules may be compacted where appropriate)
 data Rule = Indexed CExpr IndT RuleName RuleIdx -- Beginning of an inference with relevant rule
           | Compact CExpr CmpT RuleName [RuleName] -- Single line rules
           | Simple RuleName -- Just an eqref to the rule (input/output redundant)
-          | Result ResT RuleIdx -- Result (multiline)
+          | Result [RuleName] ResT RuleIdx -- Result (multiline)
           | Delimiter
   deriving Show
            
@@ -143,10 +143,17 @@ compact (r:rs) = case r of
                        (map ruleName steps) : compact rs'
   _ -> r : compact rs
 
+aggregate :: [Rule] -> [Rule]
+aggregate = go []
+  where go sm (Result ls rT idx : rs) = Result (map ruleName (reverse sm)++ls) rT idx : aggregate rs
+        go sm (r@(Simple _) : rs) = go (r:sm) rs
+        go sm (r : rs) = reverse (r:sm) ++ aggregate rs
+        go _ [] = []
+
 getSteps :: RuleIdx -> [Rule] -> ([Rule],ResT,[Rule])
 getSteps idx = go []
   where go _ [] = error $ "There was no matching result for multiline rule: " ++ show idx
-        go acc (Result rT idx':rs') | idx == idx' = (reverse acc, rT, rs')
+        go acc (Result _ rT idx':rs') | idx == idx' = (reverse acc, rT, rs')
         go acc (rl:rs') = go (rl:acc) rs'
 
 ------------------
@@ -161,8 +168,11 @@ instance LatexPrintable Rule where
     Compact e (ChkCmp _T t) rn rs-> ltx "[" <©> lP e <©> lChk <©> lP _T <©> ltx "]" <©> lP rn 
                                <©> lConc (map lP rs) <©> leadsTo <©> lP t
     Simple rn -> lP rn
-    Result (InfRes _T t) idx -> endMulti endI idx <©> lInf <©> lP _T <©> leadsTo <©> lP t
-    Result (ChkRes t) idx -> endMulti endC idx <©> leadsTo <©> lP t
+    Result ls (InfRes _T t) idx -> endMulti endI idx <©> lmpConc ls <©> lInf <©> lP _T <©> leadsTo <©> lP t
+    Result ls (ChkRes t) idx -> endMulti endC idx <©> lmpConc ls <©> leadsTo <©> lP t
+
+lmpConc :: LatexPrintable a => [a] -> Latex
+lmpConc = lConc . map lP
 
 -- somewhat redundant (and orphan instance)
 instance LatexPrintable RuleIdx where
