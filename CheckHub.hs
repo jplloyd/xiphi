@@ -10,7 +10,9 @@ import ElabSpec
 import Internal
 import Types
 import DList
+import LatexPrint
 
+import Data.List
 import Control.Arrow
 import Control.Applicative
 import Prelude hiding (log)
@@ -27,7 +29,11 @@ data OptChkProb = OCP {posts :: [((Name,SExpr), Maybe Type)],
                        termS :: SExpr, 
                        typeS :: (SExpr,Maybe Type)}
 
-printLog _ = putStrLn "LOG"
+printLog :: [Rule] -> IO ()
+printLog rs = do
+  putStrLn "\n\n"
+  putStrLn (unlines (intersperse "\\\\" $ map (show . lP) (compact rs)))
+  putStrLn "\n\n"
 
 
 -- Don't look at it right now

@@ -1,5 +1,5 @@
 {-# LANGUAGE TupleSections #-}
-{-# OPTIONS -W -Wall #-}
+{-# OPTIONS -Wall #-}
 -- | Elaboration is the transformation of an expression in the Core grammar 
 -- to a term in the Internal grammar, under the generation of constraints
 -- on subterms of the output. The peculiar variable names are used to 
@@ -97,25 +97,39 @@ lookupGamma n = lookupE n . gamma <$> ask >>= \mt -> maybeErr mt id errMsg
 
 check :: CExpr -> Type -> TCM Term
 check _e _T = case (_e,_T) of
-  (CLam (CBind x1 _D) e, IFun (x2,_U) _V) -> do
-    leffe _D _U
-    let bx = (x1,_U)
-        _V' = Sub (IVar x1) x2 ® _V
-    v <- addBinds [bx] $ e ⇇ _V'
-    return (ILam bx v)
-  (CEStr phiCs, ISig fUs) -> do
-    liftM IStruct $ expRec phiCs fUs
-  (CWld,_) -> freshMeta _T
-  _ -> do
-    (_U,u) <- infer _e
-    genEq u _U _T
-
-leffe :: CExpr -> Type -> TCM ()
-leffe CWld       _          = return ()
-leffe (CESig fs) (ISig fUs) =
-    unless (subsequence (getList fs) (map ibF fUs)) $ throwError
-      (show fs ++ " is not a subsequence of " ++ show fUs)
-leffe _          _          = error "No support for bound type"
+    (CLam (CBind x1 _D) e, IFun (x2,_U) _V) -> do
+      ridx <- sayRule' (chkInd _e _T CheckLam) -- LOG
+      lamTChk _D _U
+      let bx = (x1,_U)
+          _V' = Sub (IVar x1) x2 ® _V
+      sayRule (Simple GenSubst) -- LOG
+      v <- addBinds [bx] $ e ⇇ _V'
+      let t = ILam bx v
+      sayRule (chkRes t ridx) -- LOG
+      return t
+    (CEStr phiCs, ISig fUs) -> do
+      let rule = if null phiCs then CheckExpB else CheckExpC
+      ridx <- sayRule' (chkInd _e _T rule) -- LOG
+      t <- liftM IStruct $ expRec phiCs fUs
+      sayRule (chkRes t ridx) -- LOG
+      return t
+    (CWld,_) -> do
+      t <- freshMeta _T
+      sayRule (chkCmp _e _T CheckWld [FreshMeta] t) -- LOG
+      return t
+    _ -> do
+      ridx <- sayRule' (chkInd _e _T CheckGen) -- LOG
+      (_U,u) <- infer _e
+      t <- genEq u _U _T
+      sayRule (chkRes t ridx) -- LOG
+      return t
+  where 
+    lamTChk :: CExpr -> Type -> TCM ()
+    lamTChk CWld       _          = return ()
+    lamTChk (CESig fs) (ISig fUs) =
+        unless (subsequence (getList fs) (map ibF fUs)) $ throwError
+          (show fs ++ " is not a subsequence of " ++ show fUs)
+    lamTChk _          _          = throwError "No support for bound type"
 
 -- Expand structs, inserting metavariables for missing arguments
 -- fails if there are too many arguments (relative to expl. assignments)
@@ -138,8 +152,9 @@ expRec phiCs fUs = case (phiCs,fUs) of
 -- Equality will either resolve immediately through reflexivity - or generate an equality constraint
 -- even better would be to just check if they are wrong straight away (very much possible)
 genEq :: Term -> Type -> Type -> TCM Term
-genEq u _U _T | _T =$= _U = return u
+genEq u _U _T | _T =$= _U = sayRule (Simple EqRedRefl) {- LOG -} >> return u
               | otherwise = do
+                  sayRule (Simple EqRedGenC)
                   _Y <- freshMeta _T
                   addC (EquC _U _T _Y u)
                   return _Y
@@ -164,13 +179,14 @@ infer _e = case _e of
 
 -- Elaborate the type of types
 infSet :: TCM (Type,Term)
-infSet = return (ISet,ISet)
+infSet = sayRule (Simple InferSet) {- LOG -} >> return (ISet,ISet)
 
 -- Elaborate a constant
 infCons :: String -> TCM (Type,Term)
 infCons k = do
   _T <- lookupSigma k
   let t = ICns k
+  sayRule (infCmp (CCns k) InferCns [] _T t) -- LOG
   return (_T,t)
 
 -- Elaborate a variable reference
@@ -178,28 +194,38 @@ infVar :: Ref -> TCM (Type,Term)
 infVar x = do
   _T <- lookupGamma x
   let t = IVar x
+  sayRule (infCmp (CVar x) InferVar [] _T t) -- LOG
   return (_T,t)
 
 -- Elaborate function types
 infFun :: CBind -> CExpr -> TCM (Type,Term)
-infFun (CBind x _D) _E = do
+infFun cb@(CBind x _D) _E = do
+  ridx <- sayRule' (infInd (CFun cb _E) InferFun) -- LOG
   _U <- _D ⇇ ISet
   _V <- addBind (x,_U) $ _E ⇇ ISet
-  return (ISet,IFun (x,_U) _V)
+  let t = IFun (x,_U) _V
+  sayRule (infRes ISet t ridx) -- LOG
+  return (ISet,t)
 
 -- Elaborate a lambda
 infLam :: CBind -> CExpr -> TCM (Type,Term)
-infLam (CBind x _D) e = do
+infLam cb@(CBind x _D) e = do
+  ridx <- sayRule' (infInd (CLam cb e) InferLam) -- LOG
   _U <- _D ⇇ ISet
   let bx = (x,_U)
   (_V,v) <- addBinds [bx] $ infer e
-  return (IFun bx _V,ILam bx v)
+  let _T = IFun bx _V
+      t = ILam bx v
+  sayRule (infRes _T t ridx) -- LOG
+  return (_T,t)
 
 -- Elaborate an application
 infApp :: CExpr -> CExpr -> TCM (Type,Term)
 infApp e1 e2 = do
+  ridx <- sayRule' (infInd (CApp e1 e2) InferApp) -- LOG
   (_T,t) <- infer e1
   (v,_V) <- appAt (t,_T) e2
+  sayRule (infRes _V v ridx) -- LOG
   return (_V,v)
 
 -- (t : T)@e ~> (v : V)
@@ -207,9 +233,11 @@ infApp e1 e2 = do
 appAt :: (Term,Type) -> CExpr -> TCM (Term,Type)
 appAt (t, _T) e = case _T of
   (IFun (x, _U) _V) -> do
+    sayRule (Simple AppKnown) -- LOG
     u <- e ⇇ _U
     return (IApp t u, Sub u x ® _V)
   _ -> do
+    sayRule (Simple AppUnknown) -- LOG
     (_U,u) <- infer e
     x  <- freshBind 
     _Y <- addBind (x,_U) $ freshMeta ISet
@@ -220,11 +248,16 @@ appAt (t, _T) e = case _T of
 -- This elaboration is very tedious when following the rules exactly
 infSig :: [FBind] -> TCM (Type,Term)
 infSig fs = case fs of 
-  [] -> return (ISet, ISig [])
+  [] -> do
+    sayRule (infCmp (CSig []) InferSigB [] ISet (ISig [])) -- LOG
+    return (ISet, ISig [])
   (FBind f _D : fs') -> do
+    ridx <- sayRule' (infInd (CSig fs) InferSigC) -- LOG
     _U <-                                      _D ⇇ ISet
     (ISig fbs) <- addBind (field f,_U) $ CSig fs' ⇇ ISet
-    return (ISet, ISig $ IBind f _U : fbs)
+    let t = ISig $ IBind f _U : fbs
+    sayRule (infRes ISet t ridx) -- LOG
+    return (ISet, t)
 
 -- Elaborate an expandable sig
 -- f ⊆ T - subsequence constraint with a fresh meta for the type
@@ -232,6 +265,7 @@ infESig :: FList -> TCM (Type,Term)
 infESig fl = do
   _X <- freshMeta ISet
   addC (SubC _X (getList fl))
+  sayRule (infCmp (CESig fl) InferESig [FreshMeta,SubSeqGenC] ISet _X) -- LOG
   return (ISet, _X)
 
 -- Elaborate an expandable struct
@@ -256,19 +290,23 @@ phiInf phiC = do
 -- Elaborate a projection
 infProj :: CExpr -> Field -> TCM (Type,Term)
 infProj e f = do
+  ridx <- sayRule' (infInd (CProj e f) InferProj) -- LOG
   (_T,t) <- infer e
   (v, _V) <- handleProj t f _T
+  sayRule (infRes _V v ridx) -- LOG
   return (_V,v)
 
--- Either gnerate a projection constraint or handle the transformation directly
+-- Either generate a projection constraint or handle the transformation directly
 handleProj :: Term -> Field -> Type -> TCM (Term,Type)
 handleProj t f _T = case _T of
   (ISig fs ) -> do
+    sayRule (Simple ProjRed) -- LOG
     (fs',_U) <- sigLookup fs f
     let proj = IProj t f
     let substs = map (Sub proj . field ) fs'
     return (proj, foldl (flip sigmaFun) _U substs)
   _          -> do
+    sayRule (Simple ProjGenC) -- LOG
     (_Y,_X) <- freshMetas
     addC (PrjC _T t f _Y _X)
     return (_Y,_X)
@@ -277,6 +315,7 @@ handleProj t f _T = case _T of
 infWld :: TCM (Type,Term)
 infWld = do
   (_Y,_X) <- freshMetas
+  sayRule (infCmp CWld InferWld [] _X _Y) -- LOG
   return (_X,_Y)
 
 
@@ -285,9 +324,10 @@ infWld = do
 -- Generate a fresh metavariable of a given type
 freshMeta :: Type -> TCM Term
 freshMeta _T = do
+--  sayRule (Simple FreshMeta) -- LOG
   metaIdx <- metaC . snd <$> get
   modify (second incMetaC)
-  _Γ <- gamma <$> ask 
+  _Γ <- gamma <$> ask
   let meta = Meta metaIdx _T _Γ
   modify (second (addMeta meta))
   return $ IMeta meta []
@@ -296,6 +336,7 @@ freshMeta _T = do
 -- the second being the type of the first
 freshMetas :: TCM (Term,Type)
 freshMetas = do
+--  sayRule (Simple FreshMetas) -- LOG
   _X <- freshMeta ISet
   _Y <- freshMeta _X
   return (_Y,_X)
