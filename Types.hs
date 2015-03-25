@@ -46,7 +46,7 @@ showRef (V c n) = toChar c:(map cUnd . show) n
 
 toChar :: RefType -> Char
 toChar b = case b of
-  VarBind -> 'v'
+  VarBind -> 'x'
   RecBind -> 'r'
   Unknown -> 'u'
 

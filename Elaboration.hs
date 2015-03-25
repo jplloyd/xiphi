@@ -300,4 +300,3 @@ structLookup :: [Assign'] -> Field -> TCM Term
 structLookup as f = go as
   where go [] = throwError $ "Attempted projection on nonexistent field: " ++ show f
         go (Ass f' t:as') = if f' == f then return t else go as'
-

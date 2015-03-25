@@ -102,6 +102,6 @@ eapp2 fe ae1 ae2 = eapp1 (eapp1 fe ae1) ae2
 elam1 n1 e = SLam [] n1 e
 elam2 n1 n2 e = elam1 n1 (elam1 n2 e)
 
-dummy = SBind "\\_"
+dummy = SBind "_"
 
 fun = SFun []

@@ -18,7 +18,7 @@ instance Show FBind where
   show (FBind f e) = par (f ++ " : " ++ show e)
   
 instance Show CBind where
-  show (CBind r e)  = par (show r ++ " : " ++ show e)
+  show (CBind r e)  = par (showRef r ++ " : " ++ show e)
 
 data CAssign = CPos CExpr | CNamed Field CExpr
 
@@ -38,9 +38,9 @@ instance Show CAssign where
     CNamed f e -> brace (show f ++ ":=" ++ show e)
 
 data CExpr = 
-   CCns Name                -- Constant
+   CSet                     -- Type of types
+ | CCns Name                -- Constant
  | CVar Ref                 -- Variable
- | CSet                     -- Type of types
  | CFun CBind CExpr         -- Dependent function type
  | CLam CBind CExpr         -- Lambda abstraction
  | CApp CExpr CExpr         -- Application
@@ -54,18 +54,20 @@ data CSigma = CS [(Name,CExpr)]
 
 -- show instance for the expressions 
 instance Show CExpr where
-  show e' = case e' of 
-    CCns n -> n
-    CVar n -> show n
-    CSet   -> "Set"
-    CFun b e -> show b ++ arrowRight ++ show e
-    CLam b e -> par $ "\\" ++ show b ++ arrowRight ++ show e
-    CApp e1 e2 -> par (show e1) ++ " " ++ show e2
-    CSig bs -> "sig" ++ brace (concatMap (strip . show) bs)
-    CESig fs -> "esig" ++ show fs
-    CEStr asn -> "estr" ++ brace (intercalate "," (map (strip . show) asn))
-    CProj e f -> show e ++"."++ f
-    CWld -> "_"
+  show e' = case e' of
+      CSet -> "Set"
+      CCns n -> n
+      CVar r -> showRef r
+      CFun b e ->         showFun b e
+      CLam b e -> "\\" ++ showFun b e
+      CApp e1 e2 -> show e1 ++ " " ++ mayPar e2
+      CSig bs -> "sig" ++ brace (concatMap (strip . show) bs)
+      CESig fs -> "esig" ++ show fs
+      CEStr asn -> "estr" ++ brace (intercalate "," (map (strip . show) asn))
+      CProj e f -> show e ++"."++ f
+      CWld -> "_"
+    where showFun b e = show b ++ arrowRight ++ show e
+          mayPar e = (if needPar e then par else id) (show e)
 
 needPar :: CExpr -> Bool
 needPar e = case e of
@@ -107,4 +109,3 @@ instance LatexPrintable CAssign where
 
 instance LatexPrintable FList where
   latexPrint (FL fs) = ltx . lBrace . intercalate ", " $ fs
-  

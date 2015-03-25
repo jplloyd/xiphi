@@ -78,23 +78,18 @@ instance Show Phi where
 
 showTerm :: Term -> String
 showTerm _t = case _t of
-   ISet -> "Set"
-   ICns n -> "<"++n++">"
-   IVar n -> showRef n
-   IFun (n,t) t' -> par $ par (showRef n ++ " : " ++ showTerm t) ++ arrowRight ++ showTerm t'
-   ILam (n,t) t' -> par $ "\\" ++ par (showRef n ++ " : " ++ showTerm t) ++ arrowRight ++ showTerm t'
-   IApp t1 t2 -> par (showTerm t1) ++ " " ++ showTerm t2
-   ISig bs -> "sig" ++ brace (intercalate "," (map showIB bs))
-   IStruct assn -> "struct" ++ brace (intercalate "," (map showAsgn' assn))
-   IProj t n -> showTerm t ++ "." ++ n
-   IMeta (Meta n _ _) sb -> "_" ++ show n ++ if null sb then "" else " " ++ show sb
-
-
--- Latex printing
-
--- Place as underset to a variable
-underset :: String -> String -> String
-underset v uset = v ++ "_{" ++ uset ++"}"
+    ISet -> "Set"
+    ICns n -> "<"++n++">"
+    IVar n -> showRef n
+    IFun (n,t) t' ->         showFun n t t'
+    ILam (n,t) t' -> "\\" ++ showFun n t t'
+    IApp t1 t2 -> showTerm t1 ++ " " ++ mayPar t2
+    ISig bs -> "sig" ++ brace (intercalate "," (map showIB bs))
+    IStruct assn -> "struct" ++ brace (intercalate "," (map showAsgn' assn))
+    IProj t n -> showTerm t ++ "." ++ n
+    IMeta (Meta n _ _) sb -> "_" ++ show n ++ if null sb then "" else " " ++ show sb
+  where showFun n t t' = par (showRef n ++ " : " ++ showTerm t) ++ arrowRight ++ showTerm t'
+        mayPar t = (if needPar t then par else id) (showTerm t)
 
 needPar :: Term -> Bool
 needPar t = case t of
@@ -102,6 +97,12 @@ needPar t = case t of
   ILam{..} -> True
   IApp{..} -> True
   _        -> False
+
+-- Latex printing
+
+-- Place as underset to a variable
+underset :: String -> String -> String
+underset v uset = v ++ "_{" ++ uset ++"}"
 
 -- These things have to be in math context in order to compile
 latexTerm :: Term -> String
@@ -222,10 +223,13 @@ instance Show a => Show (Env a) where
     where go (n,t) = show n ++ " : " ++ showTerm t
 
 instance Show Xi where
-  show (Xi _ _ constrs metas') = surround "[[\n" "\n]]\n" ("\n== Constraints == \n\n" ++ go constrs ++ "\n== Metavariables ==\n\n" ++ go1 metas') ++ summary
+  show (Xi _ _ constrs metas') = summary ++ "\n"
+      ++ "\n\n== Metavariables ==\n\n" ++ go1 metas'
+      ++ "\n\n== Constraints ==\n\n" ++ go constrs
     where go = unlines . map show . reverse
           go1 = unlines . map showMeta . reverse
-          summary = "Number of metas: " ++ show (length metas') ++ "\nNumber of constraints: " ++ show (length constrs)
+          summary = "Number of metas: "       ++ show (length metas')
+               ++ "\nNumber of constraints: " ++ show (length constrs)
 
 -- Check if a term is final (no metavariables), as should be the case post-unification
 isFinal :: Term -> Bool
@@ -375,4 +379,3 @@ _A =$= _B = case (_A,_B) of
   where go [] [] = True
         go (Ass f t:bs) (Ass f' t':bs') = f == f' && t =$= t' && bs =€= bs'
         go _ _ = False
-

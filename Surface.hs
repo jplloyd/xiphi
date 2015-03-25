@@ -57,33 +57,14 @@ wildcard = SWld
 
 instance Show SExpr where
   show e' = case e' of 
-   SSet -> "Set"
-   SVar n -> n
-   SCns n -> surround "<" ">"  n
-   SFun impl expl cod -> pTele True impl ++ " " ++ pBind False expl ++ arrowRight ++ show cod
-   SApp e1 impl e2 -> (show e1 ++ " " ++ pAssgn impl) ++ " " ++ par (show e2)
-   SLam impl var e -> par $ "\\" ++ concatMap brace impl ++ " " ++ var ++ arrowRight ++ show e
-   SWld -> "_"
-
-instance Show SAssign where
-  show e = brace $ case e of
-    SPos e' -> show e'
-    SNamed n e' -> n ++ ":=" ++ show e'
-
--- Print declared function telescope
-pTele :: Bool -> [SBind] -> String
-pTele impl = concatMap (pBind impl)
-
--- Print binds
-pBind :: Bool -> SBind -> String
-pBind True (SBind n e) = brace $ n ++ ":" ++ show e
-pBind False (SBind n e) = par $ n ++ ":" ++ show e
-
--- Print list of impl arguments (given)
-pAssgn :: [SAssign] -> String
-pAssgn = unwords  . map show
-
--- Latex printing
+      SSet -> "Set"
+      SVar n -> n
+      SCns n -> surround "<" ">"  n
+      SFun impl expl cod -> pTele True impl ++ pBind False expl ++ arrowRight ++ show cod
+      SLam impl var e -> "\\" ++ concatMap (\b -> brace b ++ " ") impl ++ var ++ arrowRight ++ show e
+      SApp e1 impl e2 -> show e1 ++ " " ++ pAssgn impl ++ mayPar e2
+      SWld -> "_"
+    where mayPar e = (if needPar e then par else id) (show e)
 
 needPar :: SExpr -> Bool
 needPar e = case e of
@@ -91,6 +72,26 @@ needPar e = case e of
   SApp{..} -> True
   SLam{..} -> True -- also illegal b.n.e
   _        -> False
+
+instance Show SAssign where
+  show e = brace $ case e of
+    SPos e' -> show e'
+    SNamed n e' -> n ++ " := " ++ show e'
+
+-- Print declared function telescope
+pTele :: Bool -> [SBind] -> String
+pTele impl = concatMap (\b -> pBind impl b ++ " ")
+
+-- Print binds
+pBind :: Bool -> SBind -> String
+pBind True (SBind n e) = brace $ n ++ " : " ++ show e
+pBind False (SBind n e) = par $ n ++ " : " ++ show e
+
+-- Print list of impl arguments (given)
+pAssgn :: [SAssign] -> String
+pAssgn = unwords . map (\a -> show a ++ " ")
+
+-- Latex printing
 
 instance LatexPrintable SExpr where
   latexPrint _e = case _e of

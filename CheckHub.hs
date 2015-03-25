@@ -40,42 +40,64 @@ process prob = do
   where handle (log,xi,expr,result) = do
 --          printDerivation log
           either (\err -> putStrLn "An elaboration error occured" >> putStrLn err) (handle' expr) result
-          putStrLn " == Meta Context =="
+          putStrLn ""
+          putStrLn "==========================="
+          putStrLn "== Metas and constraints =="
+          putStrLn "==========================="
+          putStrLn ""
           print xi
         handle' expr (posts',typ',trm) = do
           printSurface (constants prob) (typ prob) (term prob)
           printCore expr
-          putStrLn " == Postulates == "
+          putStrLn ""
+          putStrLn "=============="
+          putStrLn "== Internal =="
+          putStrLn "=============="
+          putStrLn ""
+          putStrLn "== Postulates =="
           putStrLn $ concatMap printPost' posts'
-          putStrLn " == Elab type == "
+          putStrLn "== Type =="
           putStrLn . showTerm $ typ'
-          putStrLn " == Elab term == "
+          putStrLn "== Term =="
           putStrLn . showTerm $ trm
+          putStrLn ""
 
 printPost (n,typ') = n ++ " : " ++ show typ' ++ "\n"
 
-printPost' (n,typ') = n ++ " : " ++ showTerm typ' ++ "\n" ++ n ++ " : " ++ show typ' ++ "\n"
+printPost' (n,typ') = n ++ " : " ++ showTerm typ' ++ "\n" 
+--                   ++ n ++ " : " ++ show typ' ++ "\n"
 
 printLPost (n,typ') = n ++ " : " ++ latexTerm typ' ++ "\n"
 
 printSurface psts typ' trm = do
-          putStrLn "-- surface postulates"
+          putStrLn ""
+          putStrLn "============="
+          putStrLn "== Surface =="
+          putStrLn "============="
+          putStrLn ""
+          putStrLn "== Postulates =="
           putStrLn $ concatMap printPost psts
-          putStrLn "-- surface type"
+          putStrLn "== Type =="
           print typ'
-          putStrLn "-- surface term"
+          putStrLn "== Term =="
           print trm
+          putStrLn ""
 
 printCore (psts,typ',trm) = do
-          putStrLn "-- core postulates"
+          putStrLn ""
+          putStrLn "=========="
+          putStrLn "== Core =="
+          putStrLn "=========="
+          putStrLn ""
+          putStrLn "== Postulates =="
           putStrLn $ concatMap printPost psts
-          putStrLn "-- core type"
+          putStrLn "== Type =="
           print typ'
-          putStrLn "-- core term"
+          putStrLn "== Term =="
           print trm
+          putStrLn ""
 
 processProb :: ChkProb -> Either Error ([Rule], Xi, ([(Name,CExpr)], CExpr,CExpr), Either Error ([(Name,Type)],Type,Term))
 processProb prob = go (unzip (constants prob)) (typ prob) (term prob)
   where go (ns,pstS) typS trmS = ccurr ns elabProblem <$> snd (scopecheckProb pstS typS trmS)
         ccurr ns f (a,b,c) = f (zip ns a) b c
-
