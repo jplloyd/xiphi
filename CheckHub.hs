@@ -38,7 +38,7 @@ process prob = do
     let result = processProb prob
     either (\err -> putStrLn "A scope checking error occured" >> putStrLn err) handle result
   where handle (log,xi,expr,result) = do
-          printDerivation log
+--          printDerivation log
           either (\err -> putStrLn "An elaboration error occured" >> putStrLn err) (handle' expr) result
           putStrLn " == Meta Context =="
           print xi
@@ -78,3 +78,4 @@ processProb :: ChkProb -> Either Error ([Rule], Xi, ([(Name,CExpr)], CExpr,CExpr
 processProb prob = go (unzip (constants prob)) (typ prob) (term prob)
   where go (ns,pstS) typS trmS = ccurr ns elabProblem <$> snd (scopecheckProb pstS typS trmS)
         ccurr ns f (a,b,c) = f (zip ns a) b c
+

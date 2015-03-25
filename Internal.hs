@@ -7,6 +7,7 @@ import Data.Maybe
 import Util
 import Types
 import LatexPrint
+import Core(CExpr)
 
 -- Synonyms for environments
 
@@ -129,13 +130,16 @@ latexAssn a = case a of
 
 latexConstraint :: Constraint -> String
 latexConstraint c = case c of 
-    ExpC _T phis _Y -> latexTerm _T ++ "< " ++ latexPhis phis ++ " > " ++ " \red " ++ latexTerm _Y
-    SubC _T fs     -> latexTerm _T ++ " < " ++ latexFields fs ++ " > "
-    PrjC _T t f _Y _X -> latexTerm _T ++ " < " ++ (latexTerm t ++ "." ++ mathit f) ++ " > "
-                         ++ " \red " ++ latexTerm _Y ++ " : " ++ latexTerm _X
-    EquC _U _T _X u -> par (latexTerm _U ++ " \\eq " ++ latexTerm _T)
-                       ++ " \\locks " ++  -- dagger
-                       par (latexTerm _X ++ " <- " ++ latexTerm u)
+    EquC u _U _T _X -> latexTerm u
+                         ++ hastyp ++ par (latexTerm _U ++ equals ++ latexTerm _T)
+                         ++ dagger ++ latexTerm _X
+    ChkC e    _T _X -> show (lP e)
+                         ++ checks ++ latexTerm _T
+                         ++ dagger ++ latexTerm _X
+  where hastyp = " : "
+        equals = " \\eq "
+        dagger = " \\locks "
+        checks = " \\checksOn "
 
 latexPhis :: [Phi] -> String
 latexPhis phis = latexFields $ map latexPhi phis
@@ -185,23 +189,28 @@ instance Show ContextConstraint where
 
 -- The constraint shapes without their variable contexts
 data Constraint =
-    ExpC Type [Phi] Term           -- T<Phi> => Y
-  | SubC Type [Field]              -- T<fv>
-  | PrjC Type Term Field Term Type -- T<t.f> => Y : X
-  | EquC Type Type Term Term       -- U = T ¦ X <- u
-  | Assignment Meta Term           -- Metavariable assignment
-  deriving (Eq,Ord)
+    EquC Term  Type Type Term       -- u : U = T ¦ X
+  | ChkC CExpr      Type Term       -- e <-<-  T ¦ X
+--  | Assignment Meta Term           -- Metavariable assignment
 
 instance Show Constraint where
   show c = case c of
-    ExpC _T phis _Y -> "XP " ++ showTerm _T ++ angBr (show phis) ++ rightDblArr ++ showTerm _Y
-    SubC _T fs     -> "SB " ++ showTerm _T ++ angBr (show fs)
-    PrjC _T t f _Y _X -> "PR " ++ showTerm _T ++ angBr (showTerm t ++ "." ++ f)
-                         ++ rightDblArr ++ " " ++ showTerm _Y ++ " : " ++ showTerm _X
-    EquC _U _T _X u -> "EQ " ++ par (showTerm _U ++ " = " ++ showTerm _T)
-                       ++ "\8224" ++  -- dagger
-                       par (showTerm _X ++ arrowLeft ++ showTerm u)
-    Assignment (Meta n _T g) _ASSN -> "ASGN: _" ++ show n ++ " \8788 " ++ showTerm _ASSN
+      EquC u _U _T _X -> unlines [equCns ++ showTerm  u
+                                 ,hastyp ++ showTerm _U
+                                 ,equals ++ showTerm _T
+                                 ,dagger ++ showTerm _X
+                                 ]
+      ChkC e    _T _X -> unlines [chkCns ++ show      e
+                                 ,checks ++ showTerm _T
+                                 ,dagger ++ showTerm _X
+                                 ]
+--    Assignment (Meta n _T g) _ASSN -> "ASGN: _" ++ show n ++ " \8788 " ++ showTerm _ASSN
+    where equCns = "EQU "
+          chkCns = "CHK "
+          hastyp = "  : "
+          equals = "  = "
+          dagger = "  \8224 "
+          checks = "  \8647 "
 
 showGamma :: Gamma -> String
 showGamma (Env ls) = brack . intercalate ", " . reverse $ map go ls
@@ -322,19 +331,19 @@ structLookup' as f = go as
   where go [] = error $ "Attempted projection on nonexistent field: " ++ show f
         go (Ass f' t:as') = if f' == f then t else go as'
 -- replace meta with second argument in the third argument
-instantiate :: Meta -> Term -> Term -> Term
-instantiate (Meta n _ _) subT = go
-  where go _t = case _t of
-          IFun (r,t) t' -> IFun (r, go t) (go t')
-          ILam (r,t) t' -> ILam (r,go t) (go t')
-          IApp t1 t2 -> IApp (go t1) (go t2)
-          ISig bs -> ISig $ instBinds bs
-          IStruct assn -> IStruct $ instAssgn assn
-          IProj t f -> IProj (go t) f
-          IMeta (Meta n' _ _) sb -> if n == n' then foldl (flip sigmaFun) subT sb else _t
-          _ -> _t
-        instBinds = foldr (\(IBind f t) -> (IBind f (go t):)) []
-        instAssgn = foldr (\(Ass f t) -> (Ass f (go t):)) []
+-- instantiate :: Meta -> Term -> Term -> Term
+-- instantiate (Meta n _ _) subT = go
+--   where go _t = case _t of
+--           IFun (r,t) t' -> IFun (r, go t) (go t')
+--           ILam (r,t) t' -> ILam (r,go t) (go t')
+--           IApp t1 t2 -> IApp (go t1) (go t2)
+--           ISig bs -> ISig $ instBinds bs
+--           IStruct assn -> IStruct $ instAssgn assn
+--           IProj t f -> IProj (go t) f
+--           IMeta (Meta n' _ _) sb -> if n == n' then foldl (flip sigmaFun) subT sb else _t
+--           _ -> _t
+--         instBinds = foldr (\(IBind f t) -> (IBind f (go t):)) []
+--         instAssgn = foldr (\(Ass f t) -> (Ass f (go t):)) []
 
 
 -- ## Inefficient term equality ## -------------------------
@@ -366,3 +375,4 @@ _A =$= _B = case (_A,_B) of
   where go [] [] = True
         go (Ass f t:bs) (Ass f' t':bs') = f == f' && t =$= t' && bs =€= bs'
         go _ _ = False
+

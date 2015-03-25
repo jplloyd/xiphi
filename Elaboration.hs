@@ -107,12 +107,14 @@ check _e _T = case (_e,_T) of
       let t = ILam bx v
       sayRule (chkRes t ridx) -- LOG
       return t
+    (CLam _ _, _) -> genChkConstraint _e _T
     (CEStr phiCs, ISig fUs) -> do
       let rule = if null phiCs then CheckExpB else CheckExpC
       ridx <- sayRule' (chkInd _e _T rule) -- LOG
       t <- liftM IStruct $ expRec phiCs fUs
       sayRule (chkRes t ridx) -- LOG
       return t
+    (CEStr _, _) -> genChkConstraint _e _T
     (CWld,_) -> do
       t <- freshMeta _T
       sayRule (chkCmp _e _T CheckWld [FreshMeta] t) -- LOG
@@ -120,7 +122,7 @@ check _e _T = case (_e,_T) of
     _ -> do
       ridx <- sayRule' (chkInd _e _T CheckGen) -- LOG
       (_U,u) <- infer _e
-      t <- genEq u _U _T
+      t <- chkEq u _U _T
       sayRule (chkRes t ridx) -- LOG
       return t
   where 
@@ -130,6 +132,13 @@ check _e _T = case (_e,_T) of
         unless (subsequence (getList fs) (map ibF fUs)) $ throwError
           (show fs ++ " is not a subsequence of " ++ show fUs)
     lamTChk _          _          = throwError "No support for bound type"
+
+genChkConstraint :: CExpr -> Type -> TCM Term
+genChkConstraint _e _T = do
+      _X <- freshMeta _T
+      sayRule (infCmp _e InferESig [FreshMeta,SubSeqGenC] ISet _X) -- LOG
+      addC (ChkC _e _T _X)
+      return _X
 
 -- Expand structs, inserting metavariables for missing arguments
 -- fails if there are too many arguments (relative to expl. assignments)
@@ -149,33 +158,31 @@ expRec phiCs fUs = case (phiCs,fUs) of
             _ -> (freshMeta _U, phiCs) -- No match
 
 
--- Equality will either resolve immediately through reflexivity - or generate an equality constraint
--- even better would be to just check if they are wrong straight away (very much possible)
-genEq :: Term -> Type -> Type -> TCM Term
-genEq u _U _T | _T =$= _U = sayRule (Simple EqRedRefl) {- LOG -} >> return u
-              | otherwise = do
+-- Equality will either resolve immediately through alpha conversion and reflexivity,
+-- or it will generate an equality constraint.
+-- Even better would be to just check if they are wrong straight away (very much possible).
+chkEq :: Term -> Type -> Type -> TCM Term
+chkEq u _U _T | _T =$= _U = sayRule (Simple EqRedRefl) {- LOG -} >> return u
+              | otherwise = do -- Generate equality constraint 
                   sayRule (Simple EqRedGenC)
-                  _Y <- freshMeta _T
-                  addC (EquC _U _T _Y u)
-                  return _Y
+                  _X <- freshMeta _T
+                  addC (EquC u _U _T _X)
+                  return _X
 
 -- ##  Inference rules  ## ---------------------------------
 
  -- ElabM will now have a reader for constants and possibly for Gamma as well
 infer :: CExpr -> TCM (Type,Term)
 infer _e = case _e of
-  CCns n       -> infCons n
-  CVar r       -> infVar r
-  CSet         -> infSet
-  CFun b e     -> infFun b e
-  CLam b e     -> infLam b e
-  CApp e1 e2   -> infApp e1 e2
-  CSig bsd     -> infSig bsd
-  CESig fs     -> infESig fs
-  CEStr n      -> infEStr n
-  CProj e f    -> infProj e f
-  CWld         -> infWld
-
+  CSet       -> infSet
+  CCns n     -> infCons n
+  CVar r     -> infVar r
+  CFun b e   -> infFun b e
+  CApp e1 e2 -> infApp e1 e2
+  CSig bsd   -> infSig bsd
+  CProj e f  -> infProj e f
+  _          -> error $ "No inference rule exists for core expression: "
+                          ++ show _e 
 
 -- Elaborate the type of types
 infSet :: TCM (Type,Term)
@@ -207,42 +214,21 @@ infFun cb@(CBind x _D) _E = do
   sayRule (infRes ISet t ridx) -- LOG
   return (ISet,t)
 
--- Elaborate a lambda
-infLam :: CBind -> CExpr -> TCM (Type,Term)
-infLam cb@(CBind x _D) e = do
-  ridx <- sayRule' (infInd (CLam cb e) InferLam) -- LOG
-  _U <- _D ⇇ ISet
-  let bx = (x,_U)
-  (_V,v) <- addBinds [bx] $ infer e
-  let _T = IFun bx _V
-      t = ILam bx v
-  sayRule (infRes _T t ridx) -- LOG
-  return (_T,t)
-
 -- Elaborate an application
 infApp :: CExpr -> CExpr -> TCM (Type,Term)
 infApp e1 e2 = do
-  ridx <- sayRule' (infInd (CApp e1 e2) InferApp) -- LOG
-  (_T,t) <- infer e1
-  (v,_V) <- appAt (t,_T) e2
-  sayRule (infRes _V v ridx) -- LOG
-  return (_V,v)
-
--- (t : T)@e ~> (v : V)
--- If the thing is a known function type - check against domain
-appAt :: (Term,Type) -> CExpr -> TCM (Term,Type)
-appAt (t, _T) e = case _T of
-  (IFun (x, _U) _V) -> do
+    _ <- sayRule' (infInd (CApp e1 e2) InferApp) -- LOG
+    (_T, t) <- infer e1
+    (x, _U, _V) <- getFunShape _T t
     sayRule (Simple AppKnown) -- LOG
-    u <- e ⇇ _U
-    return (IApp t u, Sub u x ® _V)
-  _ -> do
-    sayRule (Simple AppUnknown) -- LOG
-    (_U,u) <- infer e
-    x  <- freshBind 
-    _Y <- addBind (x,_U) $ freshMeta ISet
-    t' <- genEq t _T (IFun (x,_U) _Y)
-    return (IApp t' u, Sub u x ® _Y)
+    u <- e2 ⇇ _U
+    return (Sub u x ® _V, IApp t u)
+  where getFunShape (IFun (x, _U) _V) _ = return (x, _U, _V)
+        getFunShape _T t = throwError $ unlines 
+                             ["The type: " ++ show _T
+                             ,"of application head: " ++ show t
+                             ,"does not have a function type."
+                             ]
 
 -- Elaborate a record type
 -- This elaboration is very tedious when following the rules exactly
@@ -259,65 +245,23 @@ infSig fs = case fs of
     sayRule (infRes ISet t ridx) -- LOG
     return (ISet, t)
 
--- Elaborate an expandable sig
--- f ⊆ T - subsequence constraint with a fresh meta for the type
-infESig :: FList -> TCM (Type,Term)
-infESig fl = do
-  _X <- freshMeta ISet
-  addC (SubC _X (getList fl))
-  sayRule (infCmp (CESig fl) InferESig [FreshMeta,SubSeqGenC] ISet _X) -- LOG
-  return (ISet, _X)
-
--- Elaborate an expandable struct
-infEStr :: [CAssign] -> TCM (Type,Term)
-infEStr phiCs = do
-  phiIs <- mapM phiInf phiCs
-  genExp phiIs
-  
--- Generate expansion constraints
-genExp :: [Phi] -> TCM (Type,Term)
-genExp phis = do
-  (_Y,_X) <- freshMetas
-  addC (ExpC _X phis _Y)
-  return (_X,_Y)
-
--- Special elaboration of assignments
-phiInf :: CAssign -> TCM Phi
-phiInf phiC = do
-    (_V,_v) <- infer (getAExpr phiC)
-    return . flip Phi _V . maybe (Pos _v) (flip Named _v) $ getAField phiC
-
 -- Elaborate a projection
 infProj :: CExpr -> Field -> TCM (Type,Term)
 infProj e f = do
-  ridx <- sayRule' (infInd (CProj e f) InferProj) -- LOG
-  (_T,t) <- infer e
-  (v, _V) <- handleProj t f _T
-  sayRule (infRes _V v ridx) -- LOG
-  return (_V,v)
-
--- Either generate a projection constraint or handle the transformation directly
-handleProj :: Term -> Field -> Type -> TCM (Term,Type)
-handleProj t f _T = case _T of
-  (ISig fs ) -> do
+    _ <- sayRule' (infInd (CProj e f) InferProj) -- LOG
+    (_T,t) <- infer e
+    fs <- getSigShape _T t
     sayRule (Simple ProjRed) -- LOG
     (fs',_U) <- sigLookup fs f
     let proj = IProj t f
-    let substs = map (Sub proj . field ) fs'
-    return (proj, foldl (flip sigmaFun) _U substs)
-  _          -> do
-    sayRule (Simple ProjGenC) -- LOG
-    (_Y,_X) <- freshMetas
-    addC (PrjC _T t f _Y _X)
-    return (_Y,_X)
-  
--- Elaborate an unknown expression
-infWld :: TCM (Type,Term)
-infWld = do
-  (_Y,_X) <- freshMetas
-  sayRule (infCmp CWld InferWld [] _X _Y) -- LOG
-  return (_X,_Y)
-
+        substs = map (Sub proj . field ) fs'
+    return (foldl (flip sigmaFun) _U substs, proj)
+  where getSigShape (ISig fs) _ = return fs
+        getSigShape _T t = throwError $ unlines 
+                             ["The type: " ++ show _T
+                             ,"of projection target: " ++ show t
+                             ,"does not have a record type."
+                             ]
 
 -- ##  Xi-related operations  ## ---------------------------
 
@@ -331,15 +275,6 @@ freshMeta _T = do
   let meta = Meta metaIdx _T _Γ
   modify (second (addMeta meta))
   return $ IMeta meta []
-
--- Generate two fresh metavariables,
--- the second being the type of the first
-freshMetas :: TCM (Term,Type)
-freshMetas = do
---  sayRule (Simple FreshMetas) -- LOG
-  _X <- freshMeta ISet
-  _Y <- freshMeta _X
-  return (_Y,_X)
 
 -- Guaranteed fresh bind (unknown binds are not created during scope checking)
 freshBind :: TCM Ref
@@ -365,3 +300,4 @@ structLookup :: [Assign'] -> Field -> TCM Term
 structLookup as f = go as
   where go [] = throwError $ "Attempted projection on nonexistent field: " ++ show f
         go (Ass f' t:as') = if f' == f then return t else go as'
+
